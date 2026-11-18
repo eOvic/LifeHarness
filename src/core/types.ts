@@ -111,6 +111,8 @@ export interface Profile {
   values?: { name: string; why?: string }[];
   vision?: string;
   goals?: Goal[];
+  /** True once they confirmed their list of goals for the year is complete and ranked. */
+  goalsConfirmed?: boolean;
   sleep?: SleepRule;
   fixed?: FixedCommitment[];
   /** True once they confirmed the fixed-commitment list is complete (possibly empty). */

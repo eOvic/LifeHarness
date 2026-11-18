@@ -19,7 +19,7 @@ It's modelled on [LearnHarness](https://github.com/amosblomqvist/learnharness) (
    - the obstacle that usually wins;
    - the most you'd keep on a bad week.
 
-   A checklist of 12 strands shows what's still unknown. The interview can't finish until the scheduler has what it needs.
+   Every goal you mention is captured immediately, and your goal list is confirmed and ranked before the interview goes deep on any one goal. A live checklist of strands shows what's still unknown, and the interview can't finish until the scheduler has what it needs.
 2. **Plan.** A planner agent designs a goal tree and recurring blocks, and a **deterministic scheduler** places them around your anchors. The scheduler never overlaps blocks, and it reports anything that doesn't fit, with the reason. The planner iterates until every non-negotiable block fits and at least 15% of your awake time stays free, then presents the plan. You adopt it with one click.
 3. **Live it.** *Today* shows the current and next block with its if-then plan. Mark each block ✓ ½ ✗ in a second. *Week* shows the whole week visually, and **Export .ics** puts it in your phone's calendar.
 4. **Review.** Weekly scores (overall and for non-negotiable blocks), streaks and the weakest block. The coach runs WOOP on that block (wish, outcome, real obstacle, if-then plan) and redesigns the plan when the evidence says the *design* is wrong, not your willpower.

@@ -88,6 +88,7 @@ describe("agent loop", () => {
               fixed: [{ id: "job", title: "Work", days: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "17:00", category: "work" }],
               fixedConfirmed: true,
               faith: { enabled: false },
+              goalsConfirmed: true,
               energy: { peak: { start: "06:00", end: "09:00" } },
               goals: [{ id: "novel", horizon: "year", title: "Finish my novel draft", measure: "80k words", deadline: "2027-06-30", why: "creativity", confidence: 70 }],
             },

@@ -30,6 +30,7 @@ Every scheduled block traces *up* to a goal, and through it to a value. That rul
 - The goal–performance link is strongest when people are **committed**. Commitment comes from importance (e.g. making a commitment public) and from **self-efficacy**. That's why goals carry a confidence rating, and why the agent reads confidence against the track record. [E: G1]
 - For **new or complex skills**, a specific *learning* goal (discover strategies) can beat a performance goal, which can push people into unsystematic scrambling. That's why the interviewer turns "get good at X" with no clear path into a learning goal. [E: G1]
 - **Goal conflict** undermines performance. That's why the interview caps active year goals at about three and parks the rest. [E: G1 for conflict; D for the number 3]
+- **List before depth.** Every want the person voices is recorded at once as a goal stub. The interview then confirms the list is complete and ranked before going deep on any one goal. A vague stub keeps the "concrete goals" strand open, so no voiced goal can be forgotten. [D, adopted after a simulated interview went deep on the first goal mentioned and lost the other two]
 
 ## 4. Capacity is measured, not assumed
 

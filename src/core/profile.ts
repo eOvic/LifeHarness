@@ -59,7 +59,7 @@ function stripUndefined<T extends object>(o: T): T {
 export function mergeProfile(p: Profile, patch: ProfilePatch): { profile: Profile; changes: string[] } {
   const changes: string[] = [];
   const next: Profile = { ...p };
-  const scalar = ["name", "about", "timezone", "vision", "weekStart", "fixedConfirmed"] as const;
+  const scalar = ["name", "about", "timezone", "vision", "weekStart", "fixedConfirmed", "goalsConfirmed"] as const;
   for (const k of scalar) {
     if (patch[k] !== undefined && patch[k] !== null) {
       (next as Record<string, unknown>)[k] = patch[k];
@@ -174,6 +174,7 @@ export function coverage(p: Profile): Strand[] {
   const peakOk = !!p.energy?.peak && isHM(p.energy.peak.start) && isHM(p.energy.peak.end);
   return [
     { id: "direction", label: "Values & life direction", done: !!p.values?.length && !!p.vision, critical: false, hint: "top 3 values in their words, and what a good life looks like in ~3-5 years" },
+    { id: "goalList", label: "All goals listed & ranked", done: !!p.goalsConfirmed && year.length > 0, critical: true, hint: "record EVERY want they mention as a year-goal stub immediately; ask if the list is complete and which matters most; then set goalsConfirmed=true" },
     { id: "goals", label: "Concrete goals (measure + deadline)", done: active.some((g) => g.measure) && !vague.length, critical: true, hint: vague.length ? `make concrete (measure/deadline): ${vague.map((g) => g.id).join(", ")}` : "at least one goal with a specific measure" },
     { id: "year", label: "Year goals (max ~3) with why + confidence", done: year.length > 0 && !noWhy.length && !noConf.length, critical: false, hint: !year.length ? "what they want to achieve this year" : `missing why: ${noWhy.map((g) => g.id).join(", ") || "-"}; missing confidence: ${noConf.map((g) => g.id).join(", ") || "-"}` },
     { id: "near", label: "This month / this week", done: near.length > 0, critical: false, hint: "decompose: month milestone and this week's first visible step per year goal" },

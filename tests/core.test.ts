@@ -177,8 +177,13 @@ describe("profile", () => {
   });
   it("flags the strands the scheduler cannot work without", () => {
     const crit = coverage({}).filter((s) => s.critical && !s.done).map((s) => s.id);
-    expect(crit).toEqual(["goals", "sleep", "fixed", "faith", "weekStart"]);
+    expect(crit).toEqual(["goalList", "goals", "sleep", "fixed", "faith", "weekStart"]);
+    // a voiced-but-vague goal keeps the "goals" strand open until it is made concrete
+    const stub = coverage({ goals: [{ id: "g", horizon: "year", title: "x", measure: "y" }, { id: "lose-weight", horizon: "year", title: "lose weight" }] });
+    expect(stub.find((s) => s.id === "goals")!.done).toBe(false);
+    expect(stub.find((s) => s.id === "goals")!.hint).toContain("lose-weight");
     const full: Profile = {
+      goalsConfirmed: true,
       goals: [{ id: "g", horizon: "year", title: "x", measure: "y" }],
       sleep: { bed: "23:00", wake: "07:00" },
       fixedConfirmed: true,

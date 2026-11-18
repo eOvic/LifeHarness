@@ -115,6 +115,7 @@ export const TOOLS: Record<string, Tool> = {
       values: arr(obj({ name: str(), why: str() }, ["name"]), "Top values in their words"),
       vision: str("What a good life looks like for them in ~3-5 years, in their words"),
       goals: arr(goalSchema),
+      goalsConfirmed: bool("True once they confirmed the list of year goals is complete and ranked"),
       sleep: obj({ bed: timeRule, wake: timeRule, hours: num("Sleep length; used when wake is not given"), override: obj({ days: arr(day), bed: timeRule, wake: timeRule }, ["days"], "Different times on some days") }, [], "Desired sleep"),
       fixed: arr(fixedSchema, "Fixed commitments (work, classes, family duties, commute)"),
       fixedConfirmed: bool("True once they confirmed the fixed list is complete (even if empty)"),
