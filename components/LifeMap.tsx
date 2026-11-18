@@ -194,7 +194,7 @@ export default function LifeMap({ profile, strands, compact = false }: { profile
               </>
             )}
           </p>
-          {p.energy.notes && !compact && <p className="text-xs text-muted">{p.energy.notes}</p>}
+          {p.energy.notes && <p className={`text-xs text-muted ${compact ? "line-clamp-2" : ""}`}>{p.energy.notes}</p>}
         </Section>
       )}
       {(!!p.history?.length || !!p.obstacles?.length) && (

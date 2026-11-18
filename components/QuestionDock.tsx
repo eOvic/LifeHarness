@@ -13,13 +13,12 @@ export default function QuestionDock({ args, busy, onSubmit }: { args: AskQuesti
   const rootRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
+  // The parent remounts this component per question (key = toolCallId), so state starts fresh.
+  // Focus once on mount only: never move the cursor while the person is typing.
   useEffect(() => {
-    setSelected([]);
-    setOther("");
-    setThinking("");
-    setConfidence(null);
-    if (kind === "text") setTimeout(() => textRef.current?.focus(), 50);
-  }, [args, kind]);
+    if (kind === "text") textRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggle = (label: string) => {
     if (kind === "multi") setSelected((s) => (s.includes(label) ? s.filter((x) => x !== label) : [...s, label]));

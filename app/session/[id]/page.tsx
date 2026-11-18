@@ -198,7 +198,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
             </div>
           )}
           {pending ? (
-            <QuestionDock args={pending.args} busy={busy} onSubmit={answer} />
+            <QuestionDock key={pending.toolCallId} args={pending.args} busy={busy} onSubmit={answer} />
           ) : (
             <div className="flex items-end gap-2 rounded-2xl border border-line bg-white p-2 shadow-sm">
               <textarea
