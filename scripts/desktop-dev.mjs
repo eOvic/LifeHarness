@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import http from "node:http";
 
 const PORT = process.env.PORT || "3210";
-const url = `http://localhost:${PORT}`;
+const url = `http://127.0.0.1:${PORT}`; // loopback only (never the LAN)
 const get = (path) =>
   new Promise((resolve) => {
     http
@@ -19,7 +19,7 @@ let next = null;
 if ((await get("/api/health")) !== 200) {
   console.log(`starting next dev on ${url} ...`);
   // Own process group, so we can stop next-server itself (not just the npx wrapper) on exit.
-  next = spawn("npx", ["next", "dev", "-p", PORT], { stdio: "inherit", env: process.env, detached: true });
+  next = spawn("npx", ["next", "dev", "-H", "127.0.0.1", "-p", PORT], { stdio: "inherit", env: process.env, detached: true });
   for (let i = 0; i < 300 && (await get("/api/health")) !== 200; i++) await new Promise((r) => setTimeout(r, 300));
 }
 // Warm up: compile the main routes before the window opens. First-time compiles while the

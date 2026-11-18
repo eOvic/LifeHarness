@@ -1,8 +1,11 @@
 import type { NextConfig } from "next";
+import pkg from "./package.json";
 
 const nextConfig: NextConfig = {
   // Desktop builds bundle a self-contained server (node .next/standalone/server.js).
   ...(process.env.LIFEHARNESS_STANDALONE ? { output: "standalone" as const } : {}),
+  // Shown in Settings → About (the desktop shell passes the same value at runtime).
+  env: { LIFEHARNESS_VERSION: pkg.version },
   // The dev-tools badge would sit on top of the sidebar inside the desktop window.
   devIndicators: false,
   // The Pi engine is loaded natively by Node, not bundled (same approach as LearnHarness).

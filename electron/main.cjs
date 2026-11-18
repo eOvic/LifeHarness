@@ -11,7 +11,8 @@
  * the top-right corner (titleBarOverlay) in the theme's colors, and the page leaves room for
  * them with env(titlebar-area-*).
  */
-const { app, BrowserWindow, dialog, ipcMain, Menu, shell, session } = require("electron");
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell, session } = require("electron");
+const { randomBytes } = require("node:crypto");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -31,6 +32,17 @@ if (!app.requestSingleInstanceLock()) {
 const userData = () => app.getPath("userData");
 const dataDir = () => process.env.LIFEHARNESS_DATA_DIR || path.join(userData(), "data");
 const logDir = () => path.join(userData(), "logs");
+/** AI sign-ins and keys: the app's own file (never pi's). The server reads and writes it. */
+const authFile = () => process.env.LIFEHARNESS_AUTH_FILE || path.join(userData(), "auth.json");
+
+/** Keep logs bounded: past 5 MB, the old file becomes <name>.1 (one generation). */
+function rotate(file) {
+  try {
+    if (fs.statSync(file).size > 5 * 1024 * 1024) fs.renameSync(file, `${file}.1`);
+  } catch {
+    /* missing: nothing to rotate */
+  }
+}
 
 function log(msg) {
   try {
@@ -83,7 +95,14 @@ function saveState(win) {
 }
 
 // ---- the local server --------------------------------------------------------------------
+// The server holds your life map and AI credentials. Besides listening on loopback only, every
+// request must carry this per-launch secret, which only this shell's window sends (see
+// guardRequests); other users/processes on the machine and web pages can't use the API.
 let server = null;
+let serverPort = 0;
+let quitting = false;
+const apiSecret = randomBytes(32).toString("hex");
+const SECRET_HEADER = "x-lifeharness-secret";
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -118,9 +137,11 @@ function waitHealthy(url, child, timeoutMs = 45000) {
 async function startServer() {
   const serverJs = path.join(process.resourcesPath, "server", "server.js");
   if (!fs.existsSync(serverJs)) throw new Error(`server not found at ${serverJs}`);
-  const port = await freePort();
+  const port = serverPort || (await freePort()); // a restart keeps the port: the window's origin stays valid
+  serverPort = port;
   fs.mkdirSync(dataDir(), { recursive: true });
   fs.mkdirSync(logDir(), { recursive: true });
+  rotate(path.join(logDir(), "server.log"));
   const out = fs.openSync(path.join(logDir(), "server.log"), "a");
   server = spawn(process.execPath, [serverJs], {
     cwd: path.dirname(serverJs),
@@ -131,22 +152,93 @@ async function startServer() {
       PORT: String(port),
       HOSTNAME: "127.0.0.1", // never listen on the network
       LIFEHARNESS_DATA_DIR: dataDir(),
+      LIFEHARNESS_AUTH_FILE: authFile(),
+      LIFEHARNESS_API_SECRET: apiSecret,
+      LIFEHARNESS_VERSION: app.getVersion(),
       LIFEHARNESS_DESKTOP: "1",
     },
     stdio: ["ignore", out, out],
   });
-  server.on("exit", (code) => log(`server exited (${code})`));
+  fs.closeSync(out);
+  const child = server;
+  child.on("exit", (code, signal) => {
+    log(`server exited (${code ?? signal})`);
+    if (!quitting && child === server) restartServer();
+  });
   const url = `http://127.0.0.1:${port}`;
-  await waitHealthy(url, server);
+  await waitHealthy(url, child);
   log(`server ready on ${url}`);
   return url;
 }
 
+// If the server dies (crash, OOM, killed), bring it back on the same port and reload the page.
+const restarts = [];
+async function restartServer() {
+  const now = Date.now();
+  while (restarts.length && now - restarts[0] > 60000) restarts.shift();
+  restarts.push(now);
+  if (restarts.length > 3) {
+    log("server keeps exiting; giving up");
+    if (win) dialog.showErrorBox(`${PRODUCT} stopped working`, `Its local server keeps exiting. Logs: ${logDir()}`);
+    return;
+  }
+  try {
+    await startServer();
+    if (win && !win.isDestroyed()) win.webContents.reload();
+  } catch (err) {
+    log(`restart failed: ${err && err.message}`);
+  }
+}
+
 function stopServer() {
+  quitting = true;
   if (server && server.exitCode === null) {
     server.kill("SIGTERM");
     setTimeout(() => server && server.exitCode === null && server.kill("SIGKILL"), 2000).unref();
   }
+}
+
+/** Add the secret to requests for the app's own origin, and strip it from everything else
+ *  (including redirects to other sites, which would otherwise carry it along). */
+function guardRequests(origin) {
+  session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ["<all_urls>"] }, (details, callback) => {
+    const headers = { ...details.requestHeaders };
+    let own = false;
+    try {
+      own = new URL(details.url).origin === origin;
+    } catch {
+      /* not a URL we care about */
+    }
+    if (own) headers[SECRET_HEADER] = apiSecret;
+    else delete headers[SECRET_HEADER];
+    callback({ requestHeaders: headers });
+  });
+}
+
+/** Right-click menu: copy/paste (e.g. an API key), spelling suggestions, links. Electron has none by default. */
+function attachContextMenu(w, origin) {
+  w.webContents.on("context-menu", (_e, p) => {
+    const items = [];
+    if (p.misspelledWord) {
+      for (const word of (p.dictionarySuggestions || []).slice(0, 5)) items.push({ label: word, click: () => w.webContents.replaceMisspelling(word) });
+      items.push({ label: "Add to dictionary", click: () => w.webContents.session.addWordToSpellCheckerDictionary(p.misspelledWord) });
+      items.push({ type: "separator" });
+    }
+    if (p.linkURL && /^(https?|mailto):/.test(p.linkURL) && !p.linkURL.startsWith(origin)) {
+      items.push({ label: "Open link in browser", click: () => shell.openExternal(p.linkURL) });
+      items.push({ label: "Copy link address", click: () => clipboard.writeText(p.linkURL) });
+      items.push({ type: "separator" });
+    }
+    if (p.isEditable) {
+      const f = p.editFlags;
+      items.push({ role: "undo", enabled: f.canUndo }, { role: "redo", enabled: f.canRedo }, { type: "separator" });
+      items.push({ role: "cut", enabled: f.canCut }, { role: "copy", enabled: f.canCopy }, { role: "paste", enabled: f.canPaste }, { type: "separator" }, { role: "selectAll" });
+    } else if (p.selectionText && p.selectionText.trim()) {
+      items.push({ role: "copy" });
+    }
+    while (items.length && items[items.length - 1].type === "separator") items.pop();
+    if (items.length) Menu.buildFromTemplate(items).popup({ window: w });
+  });
 }
 
 // ---- window --------------------------------------------------------------------------------
@@ -179,6 +271,7 @@ function createWindow(url) {
   if (state.maximized) win.maximize();
 
   const origin = new URL(url).origin;
+  attachContextMenu(win, origin);
   // Links: in-app navigation stays in-app; anything else opens in the real browser.
   win.webContents.setWindowOpenHandler(({ url: target }) => {
     if (/^(https?|mailto):/.test(target) && !target.startsWith(origin)) shell.openExternal(target);
@@ -238,6 +331,12 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
+// "Open folder" buttons in Settings: only the app's own folders, never a path from the page.
+ipcMain.on("lh:open-folder", (_e, which) => {
+  const dir = { data: dataDir(), config: userData(), logs: logDir() }[which];
+  if (dir) shell.openPath(dir);
+});
+
 // The renderer reports theme changes so the native chrome follows.
 ipcMain.on("lh:set-chrome", (e, c) => {
   const w = BrowserWindow.fromWebContents(e.sender);
@@ -262,7 +361,9 @@ app.whenReady().then(async () => {
   // Deny-by-default permissions; only clipboard writes (copy buttons) are allowed.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === "clipboard-sanitized-write"));
   try {
+    rotate(path.join(logDir(), "main.log"));
     const url = DEV_URL || (await startServer());
+    if (!DEV_URL) guardRequests(new URL(url).origin);
     createWindow(url);
   } catch (err) {
     log(`startup failed: ${err && err.stack}`);

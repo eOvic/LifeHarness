@@ -7,4 +7,6 @@ contextBridge.exposeInMainWorld("lifeharness", {
   platform: process.platform,
   /** Recolor the native window chrome (title bar buttons, resize background) to the theme. */
   setChrome: (c) => ipcRenderer.send("lh:set-chrome", { background: String(c.background), symbol: String(c.symbol) }),
+  /** Open one of the app's own folders: "data" | "config" | "logs" (nothing else). */
+  openFolder: (which) => ipcRenderer.send("lh:open-folder", String(which)),
 });
