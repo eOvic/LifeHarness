@@ -13,13 +13,13 @@ const PROMPTS_DIR = process.env.LIFEHARNESS_PROMPTS_DIR || path.join(process.cwd
 const PHASE_FILE: Record<Phase, string> = { intake: "intake.md", plan: "planner.md", review: "review.md" };
 
 function read(rel: string): string {
-  return fs.readFileSync(path.join(PROMPTS_DIR, rel), "utf8").trim();
+  return fs.readFileSync(path.join(/*turbopackIgnore: true*/ PROMPTS_DIR, rel), "utf8").trim();
 }
 
 function shared(): string[] {
-  const dir = path.join(PROMPTS_DIR, "shared");
+  const dir = path.join(/*turbopackIgnore: true*/ PROMPTS_DIR, "shared");
   return fs
-    .readdirSync(dir)
+    .readdirSync(/*turbopackIgnore: true*/ dir)
     .filter((f) => /^\d+-[\w.-]+\.md$/.test(f))
     .sort()
     .map((f) => read(`shared/${f}`));

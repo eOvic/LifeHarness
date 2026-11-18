@@ -10,12 +10,12 @@ import type { BlockSpec, Goal, Plan, Profile, Tracking, WeekSchedule } from "../
 export const DATA_DIR = process.env.LIFEHARNESS_DATA_DIR || path.join(process.cwd(), "data");
 
 function file(...p: string[]) {
-  return path.join(DATA_DIR, ...p);
+  return path.join(/*turbopackIgnore: true*/ DATA_DIR, ...p);
 }
 
 export function readJson<T>(rel: string, fallback: T): T {
   try {
-    return JSON.parse(fs.readFileSync(file(rel), "utf8")) as T;
+    return JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ file(rel), "utf8")) as T;
   } catch {
     return fallback;
   }
@@ -23,10 +23,10 @@ export function readJson<T>(rel: string, fallback: T): T {
 
 export function writeJson(rel: string, value: unknown) {
   const f = file(rel);
-  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.mkdirSync(/*turbopackIgnore: true*/ path.dirname(f), { recursive: true });
   const tmp = `${f}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 1));
-  fs.renameSync(tmp, f);
+  fs.writeFileSync(/*turbopackIgnore: true*/ tmp, JSON.stringify(value, null, 1));
+  fs.renameSync(/*turbopackIgnore: true*/ tmp, f);
 }
 
 // ---- settings ---------------------------------------------------------------------------
@@ -139,9 +139,9 @@ export function saveChat(rec: ChatRecord) {
 
 export function listChats(): Pick<ChatRecord, "id" | "kind" | "title" | "phase" | "createdAt" | "updatedAt">[] {
   const dir = file("chats");
-  if (!fs.existsSync(dir)) return [];
+  if (!fs.existsSync(/*turbopackIgnore: true*/ dir)) return [];
   return fs
-    .readdirSync(dir)
+    .readdirSync(/*turbopackIgnore: true*/ dir)
     .filter((f) => f.endsWith(".json"))
     .map((f) => readJson<ChatRecord | null>(`chats/${f}`, null))
     .filter((c): c is ChatRecord => !!c)
@@ -151,5 +151,5 @@ export function listChats(): Pick<ChatRecord, "id" | "kind" | "title" | "phase" 
 
 export function deleteChat(id: string) {
   if (!/^chat_[a-z0-9_]+$/i.test(id)) return;
-  fs.rmSync(file("chats", `${id}.json`), { force: true });
+  fs.rmSync(/*turbopackIgnore: true*/ file("chats", `${id}.json`), { force: true });
 }

@@ -177,8 +177,8 @@ export function buildWeek(input: ScheduleInput, weekStartDate: string): WeekSche
       const cat = normalizeCategory(f.category ?? "work");
       const travel = Math.max(0, Math.round(f.travelMin ?? 0));
       if (travel) {
-        add({ key: `travel:${f.id}:pre`, start: s - travel, end: s, title: "Travel", category: "routine", source: "fixed", refId: f.id, core: false, tracked: false });
-        add({ key: `travel:${f.id}:post`, start: e, end: e + travel, title: "Travel", category: "routine", source: "fixed", refId: f.id, core: false, tracked: false });
+        add({ key: `travel:${f.id}:pre`, start: s - travel, end: s, title: "Travel", category: "routine", source: "fixed", refId: f.id, core: false, tracked: false, note: `Commute to ${f.title}` });
+        add({ key: `travel:${f.id}:post`, start: e, end: e + travel, title: "Travel", category: "routine", source: "fixed", refId: f.id, core: false, tracked: false, note: `Commute from ${f.title}` });
       }
       add({ key: `fixed:${f.id}`, start: s, end: e, title: f.title, category: cat, source: "fixed", refId: f.id, core: cat !== "routine", tracked: isTracked(cat), note: f.note });
       ctx.anchors.set(`fixed:${f.id}`, [s, e]);

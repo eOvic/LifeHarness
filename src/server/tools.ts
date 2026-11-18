@@ -242,7 +242,10 @@ export async function execUpdateProfile(args: ProfilePatch): Promise<ToolOutcome
     if (hit) {
       profile.location = { ...loc, lat: hit.lat, lon: hit.lon };
       notes.push(`Geocoded "${loc.city}" -> ${hit.lat}, ${hit.lon} (${hit.label}).`);
+      if (!args.timezone) notes.push(`Timezone on file is ${profile.timezone ?? "unset"}. If that isn't where they live, set the IANA timezone (e.g. Asia/Amman).`);
     } else {
+      const { lat: _lat, lon: _lon, ...rest } = loc;
+      profile.location = rest; // never keep the previous city's coordinates
       notes.push(`Could not geocode "${loc.city}". Ask for a nearby larger city, or set lat/lon directly.`);
     }
   }

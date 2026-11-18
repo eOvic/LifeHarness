@@ -206,6 +206,23 @@ describe("report", () => {
   });
 });
 
+describe("report before any plan", () => {
+  it("does not count days before a plan existed, and explains an all-100% week", () => {
+    const skeleton = buildWeek({ snapshot: student, plan: null }, "2026-11-16");
+    const withPlan = buildWeek({ snapshot: student, plan: { version: 1, blocks: studentBlocks } }, "2026-11-16");
+    // Mon-Tue had no plan yet (adopted Wednesday), Wed onward has plan v1
+    const days = [...skeleton.days.slice(0, 2), ...withPlan.days.slice(2)];
+    const marks = { "2026-11-18": { "block:deep": { status: "done" as const, at: "", title: "Deep work: thesis", core: true, category: "deep" as const } } };
+    const morning = weekReport(days, marks, "2026-11-18", 10 * 60 + 45);
+    expect(morning.days[0].unmarked + morning.days[1].unmarked).toBe(0); // pre-plan days ignored
+    expect(morning.score).toBe(100);
+    expect(morning.weakest).toBeNull(); // nothing else has started yet
+    const night = weekReport(days, marks, "2026-11-18", 23 * 60);
+    expect(night.weakestReason).toBe("unmarked"); // workout + plan-tomorrow started, never marked
+    expect(["Workout", "Plan tomorrow"]).toContain(night.weakest?.title);
+  });
+});
+
 describe("ics", () => {
   it("writes valid folded events in UTC and merges overnight sleep", () => {
     const w = buildWeek({ snapshot: student, plan: { version: 1, blocks: studentBlocks } }, "2026-11-16");

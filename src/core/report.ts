@@ -34,6 +34,8 @@ export interface WeekReport {
   unmarked: number;
   streaks: { title: string; days: number }[];
   weakest: BlockStat | null;
+  /** "score" = lowest-scoring block; "unmarked" = everything marked scored 100%, so the most-unmarked block. */
+  weakestReason: "score" | "unmarked" | null;
 }
 
 const pct = (done: number, half: number, marked: number) => (marked ? Math.round(((done + 0.5 * half) / marked) * 100) : null);
@@ -48,6 +50,11 @@ export function weekReport(days: DaySchedule[], tracking: Tracking, today: strin
   for (const d of days) {
     const marks = tracking[d.date] ?? {};
     const ds = { done: 0, half: 0, skip: 0, unmarked: 0 };
+    // Before the first plan was adopted nothing was being tracked: don't count those days.
+    if (d.planVersion == null && !Object.keys(marks).length) {
+      dayStats.push({ date: d.date, ...ds, score: null, coreScore: null });
+      continue;
+    }
     const dc = { done: 0, half: 0, marked: 0 };
     const seen = new Set<string>();
     for (const b of d.blocks) {
@@ -96,13 +103,17 @@ export function weekReport(days: DaySchedule[], tracking: Tracking, today: strin
   // Weakest: lowest score among marked blocks; if all perfect, the most-unmarked block (tracking is the habit to fix).
   const scored = blocks.filter((b) => b.score != null);
   let weakest: BlockStat | null = scored.find((b) => (b.score ?? 100) < 100) ?? null;
-  if (!weakest) weakest = [...blocks].sort((a, b) => b.unmarked - a.unmarked).find((b) => b.unmarked > 0) ?? null;
+  let weakestReason: WeekReport["weakestReason"] = weakest ? "score" : null;
+  if (!weakest) {
+    weakest = [...blocks].sort((a, b) => b.unmarked - a.unmarked).find((b) => b.unmarked > 0) ?? null;
+    if (weakest) weakestReason = "unmarked";
+  }
 
   // Core streaks: consecutive days (most recent first, today excluded if unfinished) where every
   // occurrence of that core block was marked done.
   const streaks: { title: string; days: number }[] = [];
   const coreTitles = [...new Set(days.flatMap((d) => d.blocks.filter((b) => b.core && b.tracked).map((b) => b.title)))];
-  const past = days.filter((d) => d.date <= today).reverse();
+  const past = days.filter((d) => d.date <= today && (d.planVersion != null || tracking[d.date])).reverse();
   for (const title of coreTitles) {
     let n = 0;
     for (const d of past) {
@@ -129,6 +140,7 @@ export function weekReport(days: DaySchedule[], tracking: Tracking, today: strin
     unmarked: tot.unmarked,
     streaks,
     weakest,
+    weakestReason,
   };
 }
 
@@ -139,7 +151,9 @@ export function reportText(r: WeekReport): string {
     "By block (worst first):",
     ...r.blocks.map((b) => `- ${b.core ? "★ " : ""}${b.title}: ${b.score ?? "-"}% (done ${b.done}, half ${b.half}, skipped ${b.skip}, unmarked ${b.unmarked})`),
     "Core streaks: " + (r.streaks.map((s) => `${s.title} ${s.days}d`).join(", ") || "-"),
-    `Weakest block: ${r.weakest ? `${r.weakest.title} (${r.weakest.score ?? "-"}%)` : "none"}`,
+    r.weakestReason === "unmarked"
+      ? `Everything marked scored 100%. Most-unmarked block: ${r.weakest!.title} (${r.weakest!.unmarked} unmarked): tracking is the habit to fix.`
+      : `Weakest block: ${r.weakest ? `${r.weakest.title} (${r.weakest.score ?? "-"}%)` : "none"}`,
   ];
   return lines.join("\n");
 }

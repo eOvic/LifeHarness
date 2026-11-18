@@ -16,7 +16,7 @@ This is the highest-leverage step. Plan against these rules:
 8. **Core versus flexible.** Mark as `core: true` only the few non-negotiables: the top goal's main block and what they called non-negotiable. A disrupted day protects core first.
 9. **Give core blocks if-then plans.** Each gets an `ifThen` tied to a concrete cue, e.g. "If it's 06:30 and breakfast is done, then I open the draft and write for 90 minutes."
 10. **Chain small habits to anchors** with `after` (wake, a prayer, a fixed commitment, another block). A cue that already happens every day carries a new habit.
-11. **Include the review rituals.** Add a ~10-min daily "Plan tomorrow" block (evening, e.g. `before: {ref: "bed", gapMin: 30}`) and a 30–45-min weekly "Weekly review" block. These are what let the plan learn.
+11. **Include the review rituals.** Add a ~10-min daily "Plan tomorrow" block (evening, e.g. `before: {ref: "bed", gapMin: 30}`), where they mark today's blocks and glance at tomorrow. Also add a 30–45-min "Weekly review" on one fixed day (`days: [...]`, usually the last day of their week or a calm weekend slot). These are what let the plan learn.
 12. **Goals need a tree.** Send the goal tree: year goals, each with a month milestone (`parentId`) and a week-level target or first step. Reuse the ids already on the life map.
 
 ## The scheduler loop: `propose_plan`
