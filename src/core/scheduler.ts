@@ -189,6 +189,14 @@ export function buildWeek(input: ScheduleInput, weekStartDate: string): WeekSche
       const p = faith!.prayers ?? {};
       const pre = p.preMin ?? 5;
       const jumuah = day === "fri" && p.jumuah !== false;
+      // Each prayer's time window ends at the next adhan (Isha: midnight, as an approximation).
+      const windowEnd: Record<SalahName, number> = {
+        fajr: prayers.sunrise,
+        dhuhr: prayers.asr,
+        asr: prayers.maghrib,
+        maghrib: prayers.isha,
+        isha: 1440,
+      };
       for (const name of SALAH) {
         const adhan = prayers[name];
         let s: number;
@@ -204,13 +212,30 @@ export function buildWeek(input: ScheduleInput, weekStartDate: string): WeekSche
           s = adhan - pre;
           e = s + (p.durations?.[name] ?? 20);
         }
-        // Inside a fixed commitment? Pray right after it.
-        const clash = ctx.blocks.find((b) => b.source === "fixed" && b.category !== "routine" && overlaps([s, e], [b.start, b.end]));
+        let overlay = false;
+        // Woken by the alarm a few minutes after the prayer block would start? Start at wake instead.
+        if (name === "fajr" && s < wake && e > wake && wake - s <= 10) {
+          e += wake - s;
+          s = wake;
+        }
+        // Inside a fixed commitment? Pray right after it if the prayer's window is still open
+        // by then (after any travel); otherwise it's a short prayer break inside the commitment.
+        const clash = ctx.blocks.find((b) => b.source === "fixed" && b.key.startsWith("fixed:") && overlaps([s, e], [b.start, b.end]));
         if (clash) {
           const len = e - s;
-          s = clash.end;
-          e = s + len;
-          note += ` (during ${clash.title}; pray right after it)`;
+          const travel = (snapshot.fixed ?? []).find((f) => f.id === clash.refId)?.travelMin ?? 0;
+          let after = clash.end + Math.max(0, travel);
+          for (const b of [...ctx.blocks].sort((x, y) => x.start - y.start)) {
+            if (b.source !== "sleep" && !b.overlay && overlaps([after, after + len], [b.start, b.end])) after = b.end;
+          }
+          if (after + len <= windowEnd[name]) {
+            s = after;
+            e = after + len;
+            note += ` (during ${clash.title}; pray right after it)`;
+          } else {
+            overlay = true;
+            note += ` (prayer break during ${clash.title})`;
+          }
         }
         // Inside sleep? Keep the prayer and split the sleep around it.
         const sp = sleepParts.findIndex((iv) => overlaps(iv, [s, e]));
@@ -220,7 +245,7 @@ export function buildWeek(input: ScheduleInput, weekStartDate: string): WeekSche
           note += name === "fajr" ? " (before your wake time; sleep resumes after)" : " (inside your sleep window)";
           if (name === "fajr") weekWarnings.add("Fajr falls before the wake time on some days; sleep is split around it.");
         }
-        add({ key: `prayer:${name}`, start: s, end: e, title, category: "prayer", source: "prayer", core: true, tracked: true, note });
+        add({ key: `prayer:${name}`, start: s, end: e, title, category: "prayer", source: "prayer", core: true, tracked: true, note, overlay }, !overlay);
         ctx.anchors.set(name, [s, e]);
       }
       ctx.anchors.set("sunrise", [prayers.sunrise, prayers.sunrise]);
@@ -283,7 +308,7 @@ export function buildWeek(input: ScheduleInput, weekStartDate: string): WeekSche
   // ---- finish ---------------------------------------------------------------------------------
   const out: DaySchedule[] = days.map((d) => {
     d.blocks.sort((a, b) => a.start - b.start || a.end - b.end);
-    const solid = d.blocks.filter((b) => b.source !== "sleep");
+    const solid = d.blocks.filter((b) => b.source !== "sleep" && !b.overlay);
     for (let i = 1; i < solid.length; i++) {
       if (solid[i].start < solid[i - 1].end) {
         d.warnings.push(`${d.date}: "${solid[i - 1].title}" overlaps "${solid[i].title}" at ${fmt(solid[i].start)}`);
@@ -435,7 +460,7 @@ function weekStats(days: DaySchedule[]): WeekSchedule["stats"] {
     const a = Math.max(0, Math.min(d.bed, 1440) - d.wake);
     let s = 0;
     for (const b of d.blocks) {
-      if (b.source === "sleep") continue;
+      if (b.source === "sleep" || b.overlay) continue;
       const len = Math.max(0, Math.min(b.end, 1440) - Math.max(b.start, d.wake));
       s += len;
       byCategory[b.category] = (byCategory[b.category] ?? 0) + (b.end - b.start);

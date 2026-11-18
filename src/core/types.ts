@@ -210,6 +210,8 @@ export interface ScheduledBlock {
   tracked: boolean;
   note?: string;
   ifThen?: string;
+  /** Sits inside another block (e.g. a prayer break during work); not counted as separate time. */
+  overlay?: boolean;
 }
 
 export interface DaySchedule {

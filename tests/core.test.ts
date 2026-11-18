@@ -7,7 +7,7 @@ import { buildWeek } from "@/src/core/scheduler";
 import { addDays, dayOf, fmt, toMin, weekStartOf, zonedToUtc } from "@/src/core/time";
 import type { BlockSpec, DaySchedule, Profile, ProfileSnapshot } from "@/src/core/types";
 
-const blocksOf = (d: DaySchedule) => d.blocks.filter((b) => b.source !== "sleep");
+const blocksOf = (d: DaySchedule) => d.blocks.filter((b) => b.source !== "sleep" && !b.overlay);
 function noOverlaps(days: DaySchedule[]) {
   for (const d of days) {
     const bl = blocksOf(d);
@@ -132,6 +132,33 @@ describe("scheduler", () => {
     expect(fmt(day("2026-11-19").wake)).toBe("04:18"); // 7 h later
     expect(at("2026-11-17", "block:notes")).toBe("11:00-11:30"); // after the shift
     expect(day("2026-11-20").blocks.some((b) => b.title === "Jumu'ah")).toBe(true);
+  });
+});
+
+describe("prayers inside commitments", () => {
+  it("keeps Dhuhr/Asr as prayer breaks inside a 9-5 job (their windows close before you're home)", () => {
+    const worker: ProfileSnapshot = {
+      timezone: "Asia/Amman",
+      weekStart: "sun",
+      location: { city: "Amman", lat: 31.9516, lon: 35.924 },
+      faith: { enabled: true, prayers: { method: "MuslimWorldLeague" } },
+      sleep: { bed: "23:30", wake: { anchor: "fajr", offsetMin: 0 } },
+      fixed: [{ id: "work", title: "Work", days: ["sun", "mon", "tue", "wed", "thu"], start: "09:00", end: "17:00", travelMin: 30, category: "work" }],
+    };
+    const w = buildWeek({ snapshot: worker, plan: { version: 1, blocks: [{ id: "q", title: "Quran", category: "faith", durationMin: 20, after: { ref: "fajr" } }] } }, "2026-11-15");
+    noOverlaps(w.days);
+    const sun = w.days[0];
+    const dhuhr = sun.blocks.find((b) => b.key === "prayer:dhuhr")!;
+    const asr = sun.blocks.find((b) => b.key === "prayer:asr")!;
+    expect(dhuhr.overlay && asr.overlay).toBe(true);
+    expect(dhuhr.start).toBeLessThan(sun.prayers!.asr!); // still inside its window
+    expect(dhuhr.note).toMatch(/prayer break during Work/);
+    expect(sun.warnings).toEqual([]);
+    // Wake is anchored to Fajr: the Fajr block starts at wake instead of splitting sleep.
+    expect(sun.blocks.find((b) => b.key === "prayer:fajr")!.start).toBe(sun.wake);
+    expect(w.warnings).toEqual([]);
+    // Friday: no work, Jumu'ah instead of Dhuhr.
+    expect(w.days.find((d) => d.day === "fri")!.blocks.some((b) => b.title === "Jumu'ah" && !b.overlay)).toBe(true);
   });
 });
 
