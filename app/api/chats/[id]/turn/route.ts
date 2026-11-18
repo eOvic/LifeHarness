@@ -1,6 +1,7 @@
 // One agent turn, streamed as NDJSON events (status, text deltas, tool activity, chat snapshots, done).
 import { isBusy, runTurn, TurnError, type TurnEvent, type TurnInput } from "@/src/server/agent";
-import { defaultStream, resolveModel } from "@/src/server/llm";
+import { describeModelError } from "@/src/server/errors";
+import { defaultStream, isSubscription, NoModelError, resolveModel, runtime as modelRuntime } from "@/src/server/llm";
 import { getSettings } from "@/src/server/store";
 
 export const runtime = "nodejs";
@@ -24,9 +25,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (isBusy(id)) return Response.json({ error: "A turn is already running" }, { status: 409 });
   let deps;
   try {
-    deps = { stream: await defaultStream(), model: await resolveModel(), reasoning: getSettings().reasoning };
+    const model = await resolveModel();
+    deps = {
+      stream: await defaultStream(),
+      model,
+      reasoning: getSettings().reasoning,
+      providerName: (await modelRuntime()).getProvider(model.provider)?.name ?? model.provider,
+      subscription: await isSubscription(model.provider),
+    };
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 503 });
+    const f = e instanceof NoModelError ? { message: e.message, action: "connect" as const } : describeModelError((e as Error).message);
+    return Response.json({ error: f.message, action: f.action }, { status: 503 });
   }
   const enc = new TextEncoder();
   const body = new ReadableStream({

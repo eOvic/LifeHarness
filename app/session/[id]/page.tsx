@@ -1,7 +1,8 @@
 "use client";
-import { ArrowUp, Check, PanelRight } from "lucide-react";
+import { ArrowUp, Check, PanelRight, X } from "lucide-react";
 import Link from "next/link";
 import { use, useCallback, useEffect, useRef, useState } from "react";
+import Connections from "@/components/Connections";
 import LifeMap from "@/components/LifeMap";
 import Markdown from "@/components/Markdown";
 import PageHeader from "@/components/PageHeader";
@@ -9,7 +10,7 @@ import PlanPanel from "@/components/PlanPanel";
 import QuestionDock from "@/components/QuestionDock";
 import { refreshSidebar } from "@/components/Shell";
 import { Button, cx, IconButton, Label, Segmented, Spinner } from "@/components/ui";
-import { getJson, postJson, streamTurn, type ChatView } from "@/lib/api";
+import { ApiError, getJson, postJson, streamTurn, type ChatView } from "@/lib/api";
 import type { Strand } from "@/src/core/profile";
 import type { Plan, Profile } from "@/src/core/types";
 import type { QuestionAnswer } from "@/src/server/store";
@@ -24,17 +25,30 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   const [life, setLife] = useState<ProfileState | null>(null);
   const [live, setLive] = useState<{ text: string; status: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; action?: "connect" | "retry"; detail?: string } | null>(null);
   const [tab, setTab] = useState<"map" | "plan">("map");
-  const [panel, setPanel] = useState(true);
+  const [panel, setPanel] = useState(false);
+  /** The side panel slides over the conversation instead of squeezing it when space is short. */
+  const [overlay, setOverlay] = useState(false);
+  const body = useRef<HTMLDivElement>(null);
+  /** What to re-send after the person fixes the cause (e.g. connects a model). */
+  const retry = useRef<unknown>(null);
   const [draft, setDraft] = useState("");
   const started = useRef(false);
   const lastProposal = useRef<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setPanel(window.innerWidth >= 1180);
-  }, []);
+    const el = body.current;
+    if (!el) return;
+    const fit = () => setOverlay(el.clientWidth < 1100);
+    fit();
+    setPanel(el.clientWidth >= 1100);
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!chat]);
 
   const refreshLife = useCallback(() => {
     getJson<ProfileState>("/api/profile").then(setLife).catch(() => {});
@@ -44,6 +58,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
     async (input: unknown, optimistic?: (c: ChatView) => ChatView) => {
       setBusy(true);
       setError(null);
+      retry.current = null;
       setLive({ text: "", status: "Thinking" });
       if (optimistic) setChat((c) => (c ? { ...optimistic(c) } : c));
       try {
@@ -54,10 +69,16 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
           else if (e.type === "chat") {
             setChat(e.chat);
             setLive((l) => (l ? { text: "", status: "" } : l));
-          } else if (e.type === "error") setError(e.message);
+          } else if (e.type === "error") {
+            setError({ message: e.message, action: e.action });
+            retry.current = { type: "continue" };
+          }
         });
       } catch (e) {
-        setError((e as Error).message);
+        const err = e as ApiError;
+        setError({ message: err.message, action: err.action });
+        // 503 = the turn never started (no model, engine trouble): send the same input again.
+        if (err.status === 503) retry.current = input;
       } finally {
         setBusy(false);
         setLive(null);
@@ -75,19 +96,25 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
     getJson<ChatView>(`/api/chats/${id}`)
       .then((c) => {
         setChat(c);
+        lastProposal.current = c.proposal?.toolCallId ?? null;
+        if (c.lastError && c.canContinue) {
+          setError({ message: c.lastError, action: c.lastErrorAction, detail: c.lastErrorDetail });
+          retry.current = { type: "continue" };
+        }
         const fresh = !c.items.length && !c.pending && !c.canContinue && !c.lastError;
         if (fresh && !started.current) {
           started.current = true;
           run({ type: "start" });
         }
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => setError({ message: (e as Error).message }));
     refreshLife();
   }, [id, run, refreshLife]);
 
   useEffect(() => {
     const p = chat?.proposal?.toolCallId ?? null;
     if (p && p !== lastProposal.current) {
+      // A plan just arrived in this session: show it (over the conversation if space is short).
       setTab("plan");
       setPanel(true);
       lastProposal.current = p;
@@ -124,15 +151,20 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
         items: [...c.items, { kind: "user", id: `tmp${Date.now()}`, text }],
       }));
     } catch (e) {
-      setError((e as Error).message);
+      setError({ message: (e as Error).message });
     }
+  };
+  const retryNow = () => {
+    const input = retry.current ?? { type: "continue" };
+    retry.current = null;
+    run(input);
   };
 
   if (!chat) {
     return (
       <>
         <PageHeader title=" " />
-        <div className="grid flex-1 place-items-center text-muted">{error ?? <Spinner />}</div>
+        <div className="grid flex-1 place-items-center text-muted">{error?.message ?? <Spinner />}</div>
       </>
     );
   }
@@ -145,7 +177,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
     <>
       <PageHeader
         title={chat.title}
-        meta={`${chat.usage.calls} calls · $${chat.usage.cost.toFixed(2)}`}
+        meta={meta(chat)}
         right={
           <>
             {busy && <Spinner className="mr-1" />}
@@ -170,7 +202,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
           </>
         }
       />
-      <div className="flex min-h-0 flex-1">
+      <div ref={body} className="relative flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
           <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-auto max-w-[760px] space-y-5 px-6 pb-10 pt-7">
@@ -190,6 +222,15 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
                   )}
                 </div>
               )}
+              {error?.action === "connect" && !busy && (
+                <div className="lh-rise rounded-2xl border border-accent/40 bg-panel px-5 pb-3 pt-4" data-lh="connect-panel">
+                  <p className="text-[15px] text-ink">{error.message}</p>
+                  <p className="mt-1 text-[13px] text-muted">Your session is saved; it continues as soon as a model is connected.</p>
+                  <div className="mt-4">
+                    <Connections compact onConnected={retryNow} />
+                  </div>
+                </div>
+              )}
               {chat.proposal?.adoptedVersion && !busy && (
                 <div className="flex flex-wrap items-center gap-3 rounded-xl border border-ok/40 px-4 py-3 text-[15px]">
                   <Check className="h-4 w-4 text-ok" /> Plan v{chat.proposal.adoptedVersion} is live.
@@ -206,11 +247,19 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
 
           <div className="shrink-0 px-6 pb-5">
             <div className="mx-auto max-w-[760px]">
-              {error && (
-                <div className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-danger/40 px-4 py-2.5 text-sm">
-                  <span className="min-w-0 break-words text-danger">{error}</span>
-                  {chat.canContinue && !busy && (
-                    <Button size="sm" variant="danger" onClick={() => run({ type: "continue" })}>
+              {error && error.action !== "connect" && (
+                <div className="mb-2 flex items-start justify-between gap-3 rounded-xl border border-danger/40 px-4 py-2.5 text-sm" data-lh="turn-error">
+                  <div className="min-w-0 break-words">
+                    <span className="text-danger">{error.message}</span>
+                    {error.detail && (
+                      <details className="mt-1 text-[12px] text-muted">
+                        <summary className="cursor-pointer select-none">Details</summary>
+                        <code className="lh-mono mt-1 block whitespace-pre-wrap break-all">{error.detail}</code>
+                      </details>
+                    )}
+                  </div>
+                  {(retry.current || chat.canContinue) && !busy && (
+                    <Button size="sm" variant="danger" onClick={retryNow}>
                       Retry
                     </Button>
                   )}
@@ -252,7 +301,20 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
         </div>
 
         {panel && (
-          <aside className="w-[440px] shrink-0 overflow-y-auto overflow-x-hidden border-l border-line px-5 py-4">
+          <aside
+            className={cx(
+              "w-[440px] shrink-0 overflow-y-auto overflow-x-hidden border-l border-line px-5 py-4",
+              overlay && "lh-rise absolute inset-y-0 right-0 z-20 w-[min(440px,92%)] bg-canvas shadow-[-24px_0_60px_-30px_rgba(0,0,0,0.6)]",
+            )}
+            data-lh="side-panel"
+          >
+            {overlay && (
+              <div className="-mt-1 mb-2 flex justify-end">
+                <IconButton onClick={() => setPanel(false)} title="Close panel">
+                  <X />
+                </IconButton>
+              </div>
+            )}
             <Segmented
               className="mb-5 flex w-full"
               value={tab}
@@ -354,4 +416,11 @@ function AnswerView({ a }: { a: QuestionAnswer }) {
       )}
     </div>
   );
+}
+
+/** Header line: the model in use, and usage that's honest about subscriptions. */
+function meta(chat: ChatView): string | undefined {
+  const u = chat.usage;
+  const usage = u.calls ? `${u.calls} call${u.calls === 1 ? "" : "s"} · ${u.billing === "subscription" ? "subscription" : `$${u.cost.toFixed(2)}`}` : "";
+  return [chat.model?.name, usage].filter(Boolean).join(" · ") || undefined;
 }

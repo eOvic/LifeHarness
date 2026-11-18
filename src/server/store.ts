@@ -105,8 +105,13 @@ export interface ChatRecord {
   answers: Record<string, QuestionAnswer>;
   proposal: Proposal | null;
   intakeSummary?: { summary: string; strands?: { name: string; current?: string; target?: string; notes?: string }[]; risks?: string[] };
-  usage: { cost: number; input: number; output: number; calls: number };
+  usage: { cost: number; input: number; output: number; calls: number; billing?: "subscription" | "api" };
+  /** The model of the latest call. */
+  model?: { ref: string; name: string; provider: string };
+  /** Friendly message + what the page should offer; the raw provider text is kept as detail. */
   lastError?: string;
+  lastErrorAction?: "connect" | "retry";
+  lastErrorDetail?: string;
 }
 
 export function newChat(kind: ChatKind): ChatRecord {

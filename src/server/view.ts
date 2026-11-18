@@ -1,6 +1,7 @@
 // What the browser sees of a session: a flat list of display items, derived from the stored record.
 // The stored record (native messages) is never sent as-is.
 import type { AssistantMessage, ToolResultMessage } from "@earendil-works/pi-ai";
+import { describeModelError } from "./errors";
 import { TOOL_LABELS } from "./tools";
 import type { AskQuestionArgs, ChatRecord, Proposal, QuestionAnswer } from "./store";
 
@@ -20,9 +21,24 @@ export interface ChatView {
   pending: ChatRecord["pending"];
   proposal: Proposal | null;
   usage: ChatRecord["usage"];
+  model?: ChatRecord["model"];
   lastError?: string;
+  lastErrorAction?: ChatRecord["lastErrorAction"];
+  lastErrorDetail?: string;
   canContinue: boolean;
   updatedAt: string;
+}
+
+/** Records written before friendly errors (raw provider text only) get mapped on the way out. */
+function lastErrorView(rec: ChatRecord): Pick<ChatView, "lastError" | "lastErrorAction" | "lastErrorDetail"> {
+  if (!rec.lastError) return {};
+  if (rec.lastErrorAction) return { lastError: rec.lastError, lastErrorAction: rec.lastErrorAction, lastErrorDetail: rec.lastErrorDetail };
+  // 0.1.0 shipped an incomplete engine; its sessions stopped on "Cannot find module". Fixed since.
+  if (/Cannot find module|ERR_MODULE_NOT_FOUND/.test(rec.lastError)) {
+    return { lastError: "This session stopped on an install problem that this version fixes. Retry to continue.", lastErrorAction: "retry", lastErrorDetail: rec.lastError };
+  }
+  const f = describeModelError(rec.lastError, rec.model?.provider);
+  return { lastError: f.message, lastErrorAction: f.action, lastErrorDetail: f.message === rec.lastError ? undefined : rec.lastError };
 }
 
 export function chatView(rec: ChatRecord): ChatView {
@@ -82,7 +98,8 @@ export function chatView(rec: ChatRecord): ChatView {
     pending: rec.pending,
     proposal: rec.proposal,
     usage: rec.usage,
-    lastError: rec.lastError,
+    model: rec.model,
+    ...lastErrorView(rec),
     canContinue,
     updatedAt: rec.updatedAt,
   };

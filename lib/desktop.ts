@@ -3,6 +3,8 @@ export interface DesktopBridge {
   isDesktop: true;
   platform: string;
   setChrome: (c: { background: string; symbol: string }) => void;
+  /** Open one of the app's own folders in the file manager (older shells don't have it). */
+  openFolder?: (which: "data" | "config" | "logs") => void;
 }
 
 export function desktop(): DesktopBridge | undefined {

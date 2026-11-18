@@ -3,6 +3,7 @@
 // Server tools (update_profile, propose_plan, ...) execute immediately. intake_done hands the
 // same conversation over from the interviewer to the planner (like LearnHarness's prober -> teacher).
 import { validateToolCall, type Api, type AssistantMessage, type Message, type Model, type ToolCall, type ToolResultMessage } from "@earendil-works/pi-ai";
+import { describeModelError, type ErrorAction } from "./errors";
 import type { StreamFn } from "./llm";
 import { systemPrompt } from "./prompts";
 import { getChat, saveChat, type AskQuestionArgs, type ChatRecord, type QuestionAnswer } from "./store";
@@ -30,7 +31,7 @@ export type TurnEvent =
   | { type: "text"; delta: string }
   | { type: "tool"; name: string; label: string }
   | { type: "chat"; chat: ChatView }
-  | { type: "error"; message: string }
+  | { type: "error"; message: string; action?: ErrorAction }
   | { type: "done" };
 
 export interface AgentDeps {
@@ -38,6 +39,10 @@ export interface AgentDeps {
   model: Model<Api>;
   reasoning?: "minimal" | "low" | "medium" | "high";
   maxCalls?: number;
+  /** For error messages ("OpenAI rejected…") and the cost label. */
+  providerName?: string;
+  /** Calls are covered by a subscription: the dollar figure is only an estimate at API prices. */
+  subscription?: boolean;
 }
 
 export class TurnError extends Error {
@@ -94,6 +99,8 @@ function applyInput(rec: ChatRecord, input: TurnInput) {
     const last = rec.messages[rec.messages.length - 1];
     if (!last || last.role === "assistant") throw new TurnError("Nothing to continue", 409);
     rec.lastError = undefined;
+    rec.lastErrorAction = undefined;
+    rec.lastErrorDetail = undefined;
     return;
   }
   if (rec.pending) {
@@ -164,11 +171,17 @@ export async function runTurn(chatId: string, input: TurnInput, emit: (e: TurnEv
         input: rec.usage.input + (msg.usage?.input ?? 0),
         output: rec.usage.output + (msg.usage?.output ?? 0),
         calls: rec.usage.calls + 1,
+        billing: deps.subscription ? "subscription" : "api",
       };
+      rec.model = { ref: `${deps.model.provider}/${deps.model.id}`, name: deps.model.name, provider: deps.providerName ?? deps.model.provider };
       if (msg.stopReason === "error" || msg.stopReason === "aborted") {
-        rec.lastError = msg.errorMessage || "The model request failed.";
+        const raw = msg.errorMessage || "The model request failed.";
+        const f = describeModelError(raw, deps.providerName);
+        rec.lastError = f.message;
+        rec.lastErrorAction = f.action;
+        rec.lastErrorDetail = raw === f.message ? undefined : raw;
         saveChat(rec);
-        emit({ type: "error", message: rec.lastError });
+        emit({ type: "error", message: f.message, action: f.action });
         break;
       }
 

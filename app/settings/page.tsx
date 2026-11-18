@@ -1,15 +1,26 @@
 "use client";
-import { Check } from "lucide-react";
+import { Check, FolderOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAppearance } from "@/components/appearance";
+import Connections from "@/components/Connections";
 import PageHeader from "@/components/PageHeader";
 import { Button, cx, Label, Spinner } from "@/components/ui";
 import { getJson, postJson } from "@/lib/api";
+import { desktop } from "@/lib/desktop";
+import type { ModelInfo } from "@/src/server/llm";
 import { PRAYER_METHODS } from "@/src/core/prayer";
 import { THEMES } from "@/src/core/themes";
 import { DAYS, type Profile } from "@/src/core/types";
 
-type Info = { settings: { model?: string; reasoning?: string }; models: { ref: string; name: string }[]; current: string | null; dataDir: string; error?: string };
+type Info = {
+  settings: { model?: string; reasoning?: string };
+  models: ModelInfo[];
+  current: ModelInfo | null;
+  dataDir: string;
+  configDir: string;
+  version: string | null;
+  error?: string;
+};
 
 const field = "h-9 rounded-lg border border-line bg-panel px-3 text-[14px] text-ink outline-none transition focus:border-muted";
 
@@ -51,6 +62,55 @@ export default function SettingsPage() {
       <PageHeader title="Settings" right={msg && <span className="lh-mono text-[11px] uppercase tracking-[0.07em] text-ok">{msg}</span>} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[880px] space-y-10 px-6 pb-14 pt-7">
+          <section id="models" className="scroll-mt-6">
+            <Label>AI models</Label>
+            {!info ? (
+              <div className="mt-3">
+                <Spinner />
+              </div>
+            ) : (
+              <div className="mt-3 space-y-6">
+                {info.current ? (
+                  <div className="space-y-3 rounded-xl border border-line bg-panel px-4 py-3.5">
+                    <p className="text-[15px] text-ink" data-lh="current-model">
+                      Using <b className="font-semibold">{info.current.name}</b> <span className="text-muted">· {info.current.providerName}</span>
+                      {info.current.subscription && <span className="lh-mono ml-2 text-[11px] uppercase tracking-[0.06em] text-muted">subscription</span>}
+                    </p>
+                    <Row label="Model">
+                      <select value={info.settings.model ?? ""} onChange={(e) => saveSettings({ model: e.target.value })} className={cx(field, "w-full max-w-md")} data-lh="model-select">
+                        <option value="">Automatic ({info.current.name})</option>
+                        {groups(info.models).map(([provider, ms]) => (
+                          <optgroup key={provider} label={provider}>
+                            {ms.map((m) => (
+                              <option key={m.ref} value={m.ref}>
+                                {m.name}
+                                {m.recommended ? " · recommended" : ""}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </Row>
+                    <Row label="Reasoning">
+                      <select value={info.settings.reasoning ?? "medium"} onChange={(e) => saveSettings({ reasoning: e.target.value })} className={field}>
+                        {["low", "medium", "high"].map((r) => (
+                          <option key={r}>{r}</option>
+                        ))}
+                      </select>
+                      <span className="text-sm text-muted">lower = faster, cheaper turns</span>
+                    </Row>
+                  </div>
+                ) : (
+                  <p className="rounded-xl border border-accent/40 px-4 py-3 text-[15px] text-ink" data-lh="no-model">
+                    No AI model is connected yet. Connect <b>one</b> provider below: a subscription you already have, or an API key.
+                  </p>
+                )}
+                {info.error && <p className="text-sm text-danger">{info.error}</p>}
+                <Connections onChange={load} />
+              </div>
+            )}
+          </section>
+
           <section>
             <Label>Appearance</Label>
             <p className="mt-1 text-sm text-muted">The theme sets every color, including the desktop title bar.</p>
@@ -89,40 +149,6 @@ export default function SettingsPage() {
                 );
               })}
             </div>
-          </section>
-
-          <section>
-            <Label>AI model</Label>
-            {!info ? (
-              <div className="mt-3">
-                <Spinner />
-              </div>
-            ) : (
-              <div className="mt-3 space-y-3">
-                {info.error && <p className="text-sm text-danger">{info.error}</p>}
-                <Row label="Model">
-                  <select value={info.settings.model ?? ""} onChange={(e) => saveSettings({ model: e.target.value })} className={cx(field, "w-full max-w-md")}>
-                    <option value="">Automatic ({info.current ?? "none"})</option>
-                    {info.models.map((m) => (
-                      <option key={m.ref} value={m.ref}>
-                        {m.ref}
-                      </option>
-                    ))}
-                  </select>
-                </Row>
-                <Row label="Reasoning">
-                  <select value={info.settings.reasoning ?? "medium"} onChange={(e) => saveSettings({ reasoning: e.target.value })} className={field}>
-                    {["low", "medium", "high"].map((r) => (
-                      <option key={r}>{r}</option>
-                    ))}
-                  </select>
-                  <span className="text-sm text-muted">lower = faster interview turns</span>
-                </Row>
-                <p className="text-sm text-muted">
-                  Credentials come from your pi login (<code className="lh-mono text-[12px]">~/.pi/agent/auth.json</code>) or provider keys like ANTHROPIC_API_KEY.
-                </p>
-              </div>
-            )}
           </section>
 
           {profile && (
@@ -192,10 +218,23 @@ export default function SettingsPage() {
 
           {info && (
             <section>
-              <Label>Data</Label>
-              <p className="mt-3 text-[14px] text-ink">
-                Everything is plain JSON in <code className="lh-mono rounded bg-panel px-1.5 py-0.5 text-[12px]">{info.dataDir}</code>. Back it up by copying the folder.
-              </p>
+              <Label>Data &amp; privacy</Label>
+              <div className="mt-3 space-y-3 text-[14px] leading-relaxed">
+                <p className="text-ink">
+                  Your life map, plans and tracking are plain JSON files on this computer. During a session, the conversation is sent to the AI provider you connected, and
+                  nowhere else.
+                </p>
+                <Folder label="Your data" path={info.dataDir} which="data" />
+                <Folder label="Sign-ins & keys" path={info.configDir} which="config" />
+                <p className="text-muted">Back up by copying the data folder. Keys are stored in auth.json (readable only by you); disconnect a provider to remove its key.</p>
+              </div>
+            </section>
+          )}
+
+          {info?.version && (
+            <section>
+              <Label>About</Label>
+              <p className="lh-mono mt-3 text-[12px] text-muted">LifeHarness {info.version}</p>
             </section>
           )}
         </div>
@@ -209,6 +248,27 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     <div className="flex items-center gap-4">
       <span className="w-28 shrink-0 text-[14px] text-muted">{label}</span>
       <div className="flex flex-1 flex-wrap items-center gap-2">{children}</div>
+    </div>
+  );
+}
+
+function groups(models: ModelInfo[]): [string, ModelInfo[]][] {
+  const out = new Map<string, ModelInfo[]>();
+  for (const m of models) out.set(m.providerName, [...(out.get(m.providerName) ?? []), m]);
+  return [...out.entries()].map(([k, v]) => [k, [...v].sort((a, b) => Number(b.recommended) - Number(a.recommended))]);
+}
+
+function Folder({ label, path, which }: { label: string; path: string; which: "data" | "config" }) {
+  const d = desktop();
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <span className="w-32 shrink-0 text-muted">{label}</span>
+      <code className="lh-mono min-w-0 truncate rounded bg-panel px-1.5 py-0.5 text-[12px] text-ink">{path}</code>
+      {d?.openFolder && (
+        <Button size="sm" variant="ghost" onClick={() => d.openFolder!(which)}>
+          <FolderOpen className="h-3.5 w-3.5" /> Open
+        </Button>
+      )}
     </div>
   );
 }

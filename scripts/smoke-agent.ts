@@ -28,7 +28,10 @@ const { runTurn } = await import("../src/server/agent");
 const { resolveModel, defaultStream, runtime } = await import("../src/server/llm");
 const { fmt } = await import("../src/core/time");
 
-const model = await resolveModel();
+const model = await resolveModel().catch((e: Error) => {
+  console.error(`${e.message}\n(Credentials: ~/.config/LifeHarness/auth.json, shared with the app; or set LIFEHARNESS_AUTH_FILE, or a provider env var such as OPENAI_API_KEY.)`);
+  process.exit(2);
+});
 const stream = await defaultStream();
 console.log(`model: ${model.provider}/${model.id} · data: ${process.env.LIFEHARNESS_DATA_DIR}\n`);
 
