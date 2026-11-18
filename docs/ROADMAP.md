@@ -36,13 +36,17 @@ Done:
 - A LearnHarness-style redesign: themes, a mono/sans/serif type system, a sidebar shell with a live **Now** card, tinted week, and the new dock (docs/DESIGN.md).
 - An Electron shell: frameless with theme-colored window controls, an embedded standalone server, a hardened renderer, and remembered window state.
 - `.deb` and AppImage via electron-builder; the app icon.
+- **AI models in the app** (after the first install couldn't reach any model): Settings → AI models with subscription sign-in (ChatGPT, GitHub Copilot, Grok, more) and API keys for ~40 providers, each key tested before it's saved; the app's own credential file; a "connect a model" step on first run and in any session that can't run; plain-language model errors.
+- The AI engine ships whole and is verified at build time (lazy imports had been dropped by tracing).
+- Hardening: loopback-only, same-origin writes, a per-launch desktop secret; dev servers bound to 127.0.0.1.
+- Desktop polish: right-click menu, server crash recovery, log rotation, "Open folder" buttons, About/version; layouts checked at 1440, 960 (half screen) and 760 px.
 
 Next:
+- **Local models** (Ollama / LM Studio / llama.cpp, OpenAI-compatible): the fully private option for a life coach. Needs a model good enough at tool calls for the interview.
 - **Auto-update** (electron-updater with a GitHub Releases feed).
 - **System notifications** at block starts and for the evening "mark today".
 - **Tray / top-bar widget.**
 - Start on login.
-- An in-app API-key entry for people without pi.
 - macOS and Windows builds; code signing.
 
 Original plan:

@@ -24,4 +24,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   - `npm run desktop:build [-- --dir] [-- --skip-next]` builds the packages into `dist-desktop/`.
   - The packaged app's data is `~/.config/LifeHarness/data`. Set `LIFEHARNESS_DATA_DIR` when testing so real data isn't touched.
   - `LIFEHARNESS_SHOT=/x.png LIFEHARNESS_SHOT_PATH=/week` makes the shell capture its page and quit.
-- **Stopping processes.** Never use `pkill -f` or `ps | grep` patterns that also appear in your own command line: they kill your shell. Use `pgrep -x electron` or `pgrep -x lifeharness` (process names), or kill by port or by saved PID.
+- **Stopping processes.** Never use `pkill -f` or `ps | grep` patterns that also appear in your own command line: they kill your shell. Use `pgrep -x electron` or `pgrep -x lifeharness` (process names), or kill by port or by saved PID. The packaged app's server renames itself `next-server (v16…)`: check for orphans with `ps -eo comm | grep -c '^next-server'`.
+- **Credentials.** The app uses its own `~/.config/LifeHarness/auth.json` (Settings → AI models), never pi's. Tests and QA must use scratch credentials: `LIFEHARNESS_AUTH_FILE=$(mktemp -d)/auth.json`, or `XDG_CONFIG_HOME=$(mktemp -d)` for the packaged app. Don't offer or use Claude Pro/Max sign-in (Anthropic's terms); Claude is API-key only.
+- **QA without spending money.** `npm run seed -- <dir>` writes demo data with no model calls. `scripts/qa-connections.ts` exercises every connect path (a deliberately invalid key, sign-in start, device code), saving nothing. `npm run qa:desktop` drives the packaged app at 3 window sizes.
+- **Packaging guard.** `desktop:build` copies the AI engine whole and runs `scripts/verify-server.mjs` twice. If it fails, a lazily loaded module is missing: don't ship.
+- **One `next dev` per checkout.** Two dev servers sharing `.next/dev` cause an endless reload ("HMR hash mismatch"). Restart `next dev` if pages reload in a loop.

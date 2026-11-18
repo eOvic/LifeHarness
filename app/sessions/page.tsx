@@ -7,6 +7,7 @@ import { refreshSidebar } from "@/components/Shell";
 import { IconButton, Label } from "@/components/ui";
 import { getJson } from "@/lib/api";
 import type { ChatSummary } from "@/src/server/store";
+import { fmtDateTime } from "@/lib/format";
 
 const KIND: Record<string, string> = { onboarding: "Interview + plan", review: "Weekly review", replan: "Re-plan" };
 
@@ -34,7 +35,7 @@ export default function Sessions() {
                   {c.title}
                 </Link>
                 <div className="lh-mono mt-0.5 text-[11px] uppercase tracking-[0.06em] text-muted">
-                  {KIND[c.kind] ?? c.kind} · {c.questions} questions · {new Date(c.updatedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+                  {KIND[c.kind] ?? c.kind} · {c.questions} questions · {fmtDateTime(c.updatedAt)}
                 </div>
               </div>
               <IconButton onClick={() => del(c.id)} title="Delete transcript" className="opacity-0 group-hover:opacity-100">

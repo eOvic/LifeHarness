@@ -47,19 +47,31 @@ sudo apt install ./dist-desktop/lifeharness_0.1.0_amd64.deb  # then open "LifeHa
 - **Your data stays local.** It's stored in `~/.config/LifeHarness/data` and logs in `~/.config/LifeHarness/logs`. File → *Open data folder* opens them.
 - **The `.deb` keeps Chromium's sandbox on.** It installs an AppArmor profile, which Ubuntu 24.04+ requires. The AppImage and dev runs use `--no-sandbox` instead.
 
-**Models.** The app uses the Pi engine. If you're logged into [pi](https://pi.dev) (`/login`), it just works with that login. Otherwise, set a provider key such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY`. Pick the model and reasoning level in **Settings**.
+**Models.** Connect one AI provider in **Settings → AI models** (the Start page asks on first run):
+
+- **Sign in with a subscription:** ChatGPT (Plus, Pro, Team), GitHub Copilot (free for verified students and teachers) or Grok (SuperGrok, X Premium). More sign-ins are under "More": OpenRouter, ChatGPT via Codex, Kimi, Meta, Radius.
+- **Or paste an API key:** Anthropic, OpenAI, Google Gemini (has a free tier), OpenRouter, and about 35 more. Each key is checked with one tiny request before it's saved, so a typo is caught on the spot.
+- **Claude is offered through an API key only.** Anthropic doesn't allow third-party apps to use Claude Pro/Max sign-in ([their policy](https://code.claude.com/docs/en/legal-and-compliance)).
+
+LifeHarness picks a strong, balanced model for the provider you connect (for example Claude Sonnet rather than Opus); you can change it, and the reasoning level, in Settings. Credentials live in the app's own file, `~/.config/LifeHarness/auth.json` (readable only by you). LifeHarness never reads pi's credentials. Provider environment variables (`OPENAI_API_KEY`, …) also work.
+
+**Privacy.** Your life map, plans and tracking are stored only on this computer. During a session, the conversation is sent to the AI provider you connected, and nowhere else.
 
 ## Develop
 
 ```bash
 npm install
-npm run dev           # the web app at http://localhost:3210 (data in ./data)
+npm run dev           # the web app at http://127.0.0.1:3210 (loopback only; data in ./data)
 npm run desktop       # the same app inside the desktop shell (starts next dev if needed)
 npm test              # core maths + agent loop with a scripted model (no network)
 npm run typecheck
 npm run smoke -- --rounds 30 --keep    # LIVE: a second model plays a persona through interview → plan
 npx tsx scripts/ui-e2e.ts              # drives the real UI in Chrome (server must be running)
 npm run shots                          # screenshots of every page into ./shots
+npm run seed -- /tmp/demo              # deterministic demo data (no model calls) for screenshots and QA
+npm run qa:desktop -- --data /tmp/demo # drives the packaged app at 3 window sizes: errors, overflow, screenshots
+npx tsx scripts/qa-connections.ts --exe dist-desktop/linux-unpacked/lifeharness   # every connect path, nothing saved
+npm run verify:server -- dist-desktop/linux-unpacked/resources/server             # the AI engine shipped whole
 ```
 
 Useful environment variables:

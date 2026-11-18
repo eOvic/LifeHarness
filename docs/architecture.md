@@ -112,11 +112,14 @@ Writes go to a temp file and are then renamed into place. One server process sho
 **Packaged startup.** The shell:
 1. picks a free `127.0.0.1` port;
 2. spawns `resources/server/server.js` (the Next **standalone** build) with `process.execPath` and `ELECTRON_RUN_AS_NODE=1`, so no separate Node install is needed;
-3. sets `LIFEHARNESS_DATA_DIR=~/.config/LifeHarness/data`;
+3. sets `LIFEHARNESS_DATA_DIR=~/.config/LifeHarness/data`, `LIFEHARNESS_AUTH_FILE=~/.config/LifeHarness/auth.json`, the per-launch `LIFEHARNESS_API_SECRET` and the version;
 4. polls `/api/health`, then loads the app;
-5. on quit, stops the server.
+5. if the server dies, restarts it on the same port and reloads the window (gives up with a dialog after 3 exits in a minute);
+6. on quit, stops the server. Its process is named `next-server (v16…)`, not `lifeharness`.
 
-**Dev mode.** `npm run desktop` runs `scripts/desktop-dev.mjs`, which starts or reuses `next dev`, warms up its routes, and opens the shell with `LIFEHARNESS_DEV_URL`.
+Logs (`main.log`, `server.log`) rotate past 5 MB. A right-click menu provides cut/copy/paste, spelling suggestions and link actions (Electron has none by default). Settings' "Open" buttons ask the shell to open the data, config or logs folder by name; the page can't pass a path.
+
+**Dev mode.** `npm run desktop` runs `scripts/desktop-dev.mjs`, which starts or reuses `next dev` (on 127.0.0.1), warms up its routes, and opens the shell with `LIFEHARNESS_DEV_URL`. Run only one `next dev` per checkout: two servers sharing `.next/dev` put the page in an endless "HMR hash mismatch" reload. If a dev page ever reloads in a loop, restart `next dev`.
 
 **Window.** It's frameless:
 - On Linux and Windows, `titleBarOverlay` draws the native buttons in the theme's colors. The renderer reports theme changes through the preload bridge (`window.lifeharness.setChrome`).
@@ -131,10 +134,26 @@ Writes go to a temp file and are then renamed into place. One server process sho
 
 **Packaging.** `npm run desktop:build`:
 1. builds the standalone server (`LIFEHARNESS_STANDALONE=1 next build`);
-2. stages a dependency-free app folder (`desktop-app/`: main, preload, icon);
-3. runs electron-builder, whose `afterPack` hook copies the server, including its traced `node_modules` and Turbopack's relative symlinks, into `resources/server`;
-4. outputs a `.deb` (with an AppArmor profile for Ubuntu 24.04+'s user-namespace restriction) and an AppImage.
+2. assembles the server and ships the AI engine **whole**: Next's file tracing only follows static imports, and pi loads its sign-in flows and provider SDKs lazily, so tracing alone shipped about a quarter of it (the first packaged build failed at the first model call). `scripts/server-deps.mjs` copies the full production dependency closure of the external packages, and `scripts/verify-server.mjs` checks it twice (staging folder, then the packaged app): every file present, and every pi-ai module importable from inside the server folder;
+3. stages a dependency-free app folder (`desktop-app/`: main, preload, icon);
+4. runs electron-builder, whose `afterPack` hook copies the server, including its `node_modules` and Turbopack's relative symlinks, into `resources/server`;
+5. outputs a `.deb` (with an AppArmor profile for Ubuntu 24.04+'s user-namespace restriction) and an AppImage.
 
-## Credentials
+## Credentials and model choice
 
-`ModelRuntime.create()` reuses pi's `~/.pi/agent/auth.json` (an API key or a subscription login) and provider environment variables. Set `LIFEHARNESS_AUTH_FILE` to use a separate file. Model choice and reasoning level are set in Settings.
+LifeHarness owns its credentials. `src/server/llm.ts` creates pi's `ModelRuntime` with `<config>/auth.json` and `<config>/models.json`, where `<config>` is `~/.config/LifeHarness` (the desktop app's userData; `LIFEHARNESS_CONFIG_DIR` / `LIFEHARNESS_AUTH_FILE` override). It never reads or writes `~/.pi`. Provider environment variables also count as connections.
+
+**Connecting** (`src/server/connections.ts`, Settings → AI models) goes through pi's own `login(provider, "oauth" | "api_key", interaction)`:
+- A sign-in is a *login job*. pi drives the flow; its prompts ("paste the redirect URL", "enterprise domain?") and events (open this URL, enter this device code) stream to the page as NDJSON from `POST /api/connections/login`, and answers come back on `POST /api/connections/login/<job>`. Closing the stream cancels the job (freeing callback ports such as 1455).
+- An API key is cleaned (no whitespace; keys starting with `!` are refused, because pi runs those as shell commands), then tested with one tiny request while held in memory only (`setRuntimeApiKey`). A key the provider rejects is never saved.
+- Claude Pro/Max sign-in is not offered: Anthropic doesn't allow third-party apps to use it. Claude is available with an API key.
+- After a connect, the app adopts the provider's recommended model unless a working model was already picked. Recommendations favour each provider's strong, balanced model (`PREFERENCES` in `llm.ts`; e.g. the newest Sonnet, not Opus).
+
+**Errors** a person can act on: `errors.ts` maps provider failures (rejected key, quota, network, overload, missing engine files) to one sentence and an action (`connect` or `retry`). Sessions keep the raw text as detail. A turn that can't start because nothing is connected returns 503 with `action: "connect"`, and the session shows the connect panel, then re-sends the same input once a model is connected.
+
+## Local server security
+
+The server holds the life map and the credentials, so `proxy.ts` (Next 16's middleware) guards every request:
+1. **Loopback only.** `Host` must be `localhost`, `127.x.x.x` or `[::1]`, which defeats DNS rebinding. `npm run dev` / `npm start` also bind to 127.0.0.1, never the LAN.
+2. **Same-origin writes.** Non-GET requests from another site (`Sec-Fetch-Site`, `Origin`) are refused, which stops CSRF.
+3. **Desktop secret.** The Electron shell generates a random secret per launch, passes it to the server (`LIFEHARNESS_API_SECRET`), and adds it as a header to requests for the app's own origin only (it strips it from everything else, including redirects). Without it, every route except `/api/health` answers 403, so other users and processes on the machine can't use the API.

@@ -13,16 +13,22 @@ export function refreshSidebar() {
   window.dispatchEvent(new Event("lh:refresh"));
 }
 
-const AUTOCLOSE = 980;
+/** Below this window width the sidebar closes by itself (it reopens when there's room again). */
+const AUTOCLOSE = 900;
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [open, setOpen] = useState(true);
   useEffect(() => {
+    // An explicit choice ("open"/"closed") is remembered; with none, open when there's room.
     const saved = localStorage.getItem("lh.sidebar");
-    setOpen(saved !== "closed" && window.innerWidth >= AUTOCLOSE);
+    let wide = window.innerWidth >= AUTOCLOSE;
+    setOpen(saved === "open" || (saved !== "closed" && wide));
     const onResize = () => {
-      if (window.innerWidth < AUTOCLOSE) setOpen(false);
+      const now = window.innerWidth >= AUTOCLOSE;
+      if (now === wide) return; // only react when crossing the threshold
+      wide = now;
+      setOpen(now ? localStorage.getItem("lh.sidebar") !== "closed" : false);
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);

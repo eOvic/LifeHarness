@@ -10,6 +10,7 @@ import { Button, Label, Spinner } from "@/components/ui";
 import { getJson, postJson } from "@/lib/api";
 import type { Strand } from "@/src/core/profile";
 import type { Plan, Profile } from "@/src/core/types";
+import { fmtDate, fmtDateTime } from "@/lib/format";
 
 type State = { profile: Profile; coverage: Strand[]; plan: Plan | null; versions: { version: number; adoptedAt?: string; chatId?: string }[] };
 
@@ -58,7 +59,7 @@ export default function MapPage() {
                 {s.plan ? (
                   <>
                     <p className="lh-mono mt-1 text-[11px] text-muted">
-                      v{s.plan.version} · adopted {new Date(s.plan.adoptedAt!).toLocaleDateString()} · {s.plan.blocks.length} blocks
+                      v{s.plan.version} · adopted {fmtDate(s.plan.adoptedAt!)} · {s.plan.blocks.length} blocks
                     </p>
                     <Markdown small className="mt-3">
                       {s.plan.approach}
@@ -80,7 +81,7 @@ export default function MapPage() {
                     {[...s.versions].reverse().map((v) => (
                       <li key={v.version} className="lh-mono flex items-center justify-between text-[11.5px] text-muted">
                         <span>
-                          v{v.version} · {v.adoptedAt ? new Date(v.adoptedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "draft"}
+                          v{v.version} · {v.adoptedAt ? fmtDateTime(v.adoptedAt) : "draft"}
                         </span>
                         {v.chatId && (
                           <Link href={`/session/${v.chatId}`} className="text-accent hover:underline">

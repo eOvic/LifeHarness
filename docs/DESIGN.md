@@ -60,11 +60,22 @@ Categories are mid-saturation hues (`CATEGORIES` in `src/core/types.ts`) drawn a
   - the right panel (Life map / Plan) toggles from the header.
 - **Question dock** (after LearnHarness's): a mono label ("INTERVIEW · Q7"), the question in prose, option rows with radio or checkbox circles and number-key hints, a dashed "own words" row, a confidence rail, then a **YOUR THINKING** field. Enter answers, Shift+Enter adds a newline, 1–6 picks an option.
 
+## AI models (Settings)
+
+Modelled on LearnHarness's Providers panel: quiet rows, mono labels, one small action per row.
+
+- **Subscriptions** first ("sign in with a plan you already pay for"): ChatGPT, GitHub Copilot, Grok, then "More sign-ins". **API keys** second: four featured providers, then "Add another provider".
+- **One action per row.** A row reads `Name  blurb ………… [Connect]`. A key row expands in place to `[Paste key…] Save · Cancel · Get a key ↗`; nothing navigates away.
+- **Flows stay inline.** A sign-in shows its live state under its row: the sign-in page button (opened automatically in the desktop app), a large device code with Copy and Open, or a paste field when the browser can't come back. It ends in one green sentence ("Connected. LifeHarness will use Claude Sonnet 5.5.") or one red one (the provider's own words, trimmed of JSON).
+- **Connected** rows show `✓ CONNECTED · KEY` / `· SUBSCRIPTION` and a ghost Disconnect. Secrets never come back to the page.
+- **The same panel goes wherever a model is missing:** the Start page (right under the intro) and a session that can't run (inside the conversation, which then continues by itself).
+
 ## Desktop chrome
 
 - **Frameless:** `titleBarStyle: "hidden"` plus a `titleBarOverlay` in the theme's colors on Linux and Windows; macOS gets hidden-inset traffic lights.
 - **No white flash:** the window background is the theme background, and the window shows only on `ready-to-show`.
-- **Sizes:** the minimum window is 760 × 560, and size and position are remembered.
+- **Sizes:** the minimum window is 760 × 560, and size and position are remembered. Every page is checked at 1440, 960 (half a 1080p screen, a common way to run it) and 760 px wide.
+- **Narrow windows:** the sidebar closes by itself below 900 px but remembers if you open it; the session's side panel slides over the conversation instead of squeezing it when the content area is under 1100 px; header metadata hides before a title would truncate.
 
 ## Don'ts
 
