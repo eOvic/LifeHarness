@@ -3,20 +3,22 @@
 export const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 export type Day = (typeof DAYS)[number];
 
+// Mid-saturation hues that read on dark AND light themes: the UI draws blocks as a tint
+// (colored left edge + soft fill) with the theme's own text color on top.
 export const CATEGORIES = {
-  deep: { color: "#7b5cd6", label: "Deep work" },
-  learn: { color: "#3d8fd9", label: "Learning / study" },
-  work: { color: "#5b6b84", label: "Work" },
-  class: { color: "#e05252", label: "Class / lecture" },
-  health: { color: "#3fae6a", label: "Health / exercise" },
-  prayer: { color: "#2c3e50", label: "Prayer" },
-  faith: { color: "#b8860b", label: "Faith / spiritual" },
-  relationships: { color: "#e8739a", label: "Family / friends" },
-  personal: { color: "#e8b23a", label: "Personal projects" },
-  admin: { color: "#1fb3a6", label: "Plan / review / admin" },
-  routine: { color: "#9aa3ad", label: "Meals / routine" },
-  rest: { color: "#b9c2cf", label: "Rest / free" },
-  sleep: { color: "#3b4252", label: "Sleep" },
+  deep: { color: "#8b8cf8", label: "Deep work" },
+  learn: { color: "#45b4f0", label: "Learning / study" },
+  work: { color: "#94a3b8", label: "Work" },
+  class: { color: "#f27c6c", label: "Class / lecture" },
+  health: { color: "#4fcf86", label: "Health / exercise" },
+  prayer: { color: "#38c9b4", label: "Prayer" },
+  faith: { color: "#e7b43c", label: "Faith / spiritual" },
+  relationships: { color: "#ef7fb6", label: "Family / friends" },
+  personal: { color: "#f59a52", label: "Personal projects" },
+  admin: { color: "#b88cf5", label: "Plan / review / admin" },
+  routine: { color: "#9ca3af", label: "Meals / routine" },
+  rest: { color: "#7c8591", label: "Rest / free" },
+  sleep: { color: "#5b6170", label: "Sleep" },
 } as const;
 export type Category = keyof typeof CATEGORIES;
 export const CATEGORY_KEYS = Object.keys(CATEGORIES) as Category[];

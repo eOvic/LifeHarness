@@ -1,0 +1,24 @@
+appId: dev.lifeharness.desktop
+productName: LifeHarness
+copyright: Copyright © 2026
+directories:
+  app: desktop-app          # staged by scripts/desktop-build.mjs: main.cjs + preload.cjs, no npm deps
+  output: dist-desktop
+  buildResources: build
+asar: true
+# The shell needs no npm packages (only Electron built-ins). electron-builder 26 otherwise falls
+# back to the project root and packs the whole web stack into app.asar.
+files:
+  - "**/*"
+  - "!**/node_modules/**"
+# The self-contained Next.js server (.next/standalone, with its traced node_modules) is copied to
+# resources/server by this hook:
+afterPack: scripts/after-pack.cjs
+linux:
+  target: [deb, AppImage]
+  category: Office
+  executableName: lifeharness
+  icon: build/icons
+  synopsis: From what you want in life to a week you can actually live.
+  description: An AI coach that interviews you about your goals and constraints, plans your week around them, and keeps it honest with tracking and weekly reviews.
+  syncDesktopName: true

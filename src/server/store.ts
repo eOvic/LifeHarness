@@ -34,6 +34,8 @@ export interface Settings {
   /** "provider/modelId" */
   model?: string;
   reasoning?: "minimal" | "low" | "medium" | "high";
+  /** Theme id (src/core/themes.ts) */
+  theme?: string;
 }
 export const getSettings = () => readJson<Settings>("settings.json", {});
 export const saveSettings = (s: Settings) => writeJson("settings.json", s);
@@ -137,7 +139,14 @@ export function saveChat(rec: ChatRecord) {
   writeJson(`chats/${rec.id}.json`, rec);
 }
 
-export function listChats(): Pick<ChatRecord, "id" | "kind" | "title" | "phase" | "createdAt" | "updatedAt">[] {
+export interface ChatSummary extends Pick<ChatRecord, "id" | "kind" | "title" | "phase" | "createdAt" | "updatedAt"> {
+  waiting: boolean; // an open question for the person
+  proposal: "none" | "proposed" | "adopted";
+  adoptedVersion?: number;
+  questions: number;
+}
+
+export function listChats(): ChatSummary[] {
   const dir = file("chats");
   if (!fs.existsSync(/*turbopackIgnore: true*/ dir)) return [];
   return fs
@@ -145,7 +154,18 @@ export function listChats(): Pick<ChatRecord, "id" | "kind" | "title" | "phase" 
     .filter((f) => f.endsWith(".json"))
     .map((f) => readJson<ChatRecord | null>(`chats/${f}`, null))
     .filter((c): c is ChatRecord => !!c)
-    .map(({ id, kind, title, phase, createdAt, updatedAt }) => ({ id, kind, title, phase, createdAt, updatedAt }))
+    .map((c) => ({
+      id: c.id,
+      kind: c.kind,
+      title: c.title,
+      phase: c.phase,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+      waiting: !!c.pending,
+      proposal: c.proposal ? (c.proposal.adoptedVersion ? ("adopted" as const) : ("proposed" as const)) : ("none" as const),
+      adoptedVersion: c.proposal?.adoptedVersion,
+      questions: Object.keys(c.questions ?? {}).length,
+    }))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 

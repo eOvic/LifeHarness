@@ -1,28 +1,28 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import Markdown from "./Markdown";
 import type { AskQuestionArgs, QuestionAnswer } from "@/src/server/store";
+import Markdown from "./Markdown";
+import { Button, cx, Kbd, Label } from "./ui";
 
-export default function QuestionDock({ args, busy, onSubmit }: { args: AskQuestionArgs; busy: boolean; onSubmit: (a: QuestionAnswer) => void }) {
+/** The answer dock. The parent remounts it per question (key = toolCallId), so state starts fresh. */
+export default function QuestionDock({ args, busy, label, onSubmit }: { args: AskQuestionArgs; busy: boolean; label: string; onSubmit: (a: QuestionAnswer) => void }) {
   const kind = args.kind ?? (args.options?.length ? "single" : "text");
   const options = kind === "text" ? [] : (args.options ?? []);
   const [selected, setSelected] = useState<string[]>([]);
   const [other, setOther] = useState("");
   const [thinking, setThinking] = useState("");
   const [confidence, setConfidence] = useState<number | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
-  // The parent remounts this component per question (key = toolCallId), so state starts fresh.
-  // Focus once on mount only: never move the cursor while the person is typing.
+  // Focus once, on mount only: never move the cursor while the person is typing.
   useEffect(() => {
     if (kind === "text") textRef.current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const toggle = (label: string) => {
-    if (kind === "multi") setSelected((s) => (s.includes(label) ? s.filter((x) => x !== label) : [...s, label]));
-    else setSelected((s) => (s[0] === label ? [] : [label]));
+  const toggle = (l: string) => {
+    if (kind === "multi") setSelected((s) => (s.includes(l) ? s.filter((x) => x !== l) : [...s, l]));
+    else setSelected((s) => (s[0] === l ? [] : [l]));
   };
   const hasAnswer = selected.length > 0 || other.trim().length > 0;
   const canSubmit = !busy && hasAnswer && (!args.askConfidence || confidence != null);
@@ -35,6 +35,12 @@ export default function QuestionDock({ args, busy, onSubmit }: { args: AskQuesti
       confidence: args.askConfidence ? (confidence ?? undefined) : undefined,
     });
   };
+  const enterSubmits = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      submit();
+    }
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -44,7 +50,7 @@ export default function QuestionDock({ args, busy, onSubmit }: { args: AskQuesti
         return;
       }
       const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "TEXTAREA" || tag === "INPUT") return;
+      if (tag === "TEXTAREA" || tag === "INPUT" || e.ctrlKey || e.metaKey || e.altKey) return;
       const n = Number(e.key);
       if (n >= 1 && n <= options.length) toggle(options[n - 1].label);
     };
@@ -53,99 +59,117 @@ export default function QuestionDock({ args, busy, onSubmit }: { args: AskQuesti
   });
 
   return (
-    <div ref={rootRef} className="rounded-2xl border border-accent/25 bg-white p-4 shadow-[0_6px_30px_-12px_rgba(91,75,214,0.35)]">
-      <Markdown className="text-[15px] font-medium leading-snug">{args.question}</Markdown>
-      {args.why && <p className="mt-0.5 text-xs text-muted">{args.why}</p>}
-
-      {options.length > 0 && (
-        <div className="mt-3 grid gap-1.5">
-          {options.map((o, i) => {
-            const on = selected.includes(o.label);
-            return (
-              <button
-                type="button"
-                key={o.label}
-                onClick={() => toggle(o.label)}
-                className={`flex items-start gap-3 rounded-xl border px-3 py-2 text-left transition ${
-                  on ? "border-accent bg-accent-soft" : "border-line bg-white hover:border-accent/40 hover:bg-gray-50"
-                }`}
-              >
-                <span
-                  className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center text-[11px] font-semibold ${kind === "multi" ? "rounded-md" : "rounded-full"} ${
-                    on ? "bg-accent text-white" : "border border-gray-300 text-muted"
-                  }`}
-                >
-                  {on ? "✓" : i + 1}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium leading-snug">{o.label}</span>
-                  {o.description && <span className="block text-xs leading-snug text-muted">{o.description}</span>}
-                </span>
-              </button>
-            );
-          })}
+    <div data-lh="dock" className="lh-rise overflow-hidden rounded-2xl border border-line bg-panel shadow-[0_18px_50px_-24px_rgba(0,0,0,0.55)]">
+      <div className="px-5 pb-4 pt-4">
+        <Label>{label}</Label>
+        <div data-lh="question">
+          <Markdown className="mt-1.5 font-medium">{args.question}</Markdown>
         </div>
-      )}
+        {args.why && <p className="mt-1 text-sm text-muted">{args.why}</p>}
 
-      <div className="mt-3 space-y-2">
+        {options.length > 0 && (
+          <div className="mt-4 grid gap-2">
+            {options.map((o, i) => {
+              const on = selected.includes(o.label);
+              return (
+                <button
+                  type="button"
+                  data-lh="option"
+                  key={o.label}
+                  onClick={() => toggle(o.label)}
+                  className={cx(
+                    "group flex items-start gap-3 rounded-xl border px-3.5 py-2.5 text-left transition",
+                    on ? "border-ink/70 bg-selected" : "border-line hover:border-muted/60 hover:bg-hover",
+                  )}
+                >
+                  <span
+                    className={cx(
+                      "mt-[3px] grid h-4 w-4 shrink-0 place-items-center border transition",
+                      kind === "multi" ? "rounded-[4px]" : "rounded-full",
+                      on ? "border-accent bg-accent text-accent-ink" : "border-muted/60",
+                    )}
+                  >
+                    {on && (kind === "multi" ? <span className="text-[10px] font-bold leading-none">✓</span> : <span className="h-1.5 w-1.5 rounded-full bg-accent-ink" />)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[15px] leading-snug text-ink">{o.label}</span>
+                    {o.description && <span className="mt-0.5 block text-sm leading-snug text-muted">{o.description}</span>}
+                  </span>
+                  <span className="lh-mono mt-0.5 text-[11px] text-muted opacity-0 transition group-hover:opacity-100">{i + 1}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {kind === "text" ? (
           <textarea
             ref={textRef}
+            data-lh="answer-text"
             value={other}
             onChange={(e) => setOther(e.target.value)}
+            onKeyDown={enterSubmits}
             rows={3}
             placeholder={args.placeholder ?? "Your answer, in your own words"}
-            className="w-full resize-y rounded-xl border border-line px-3 py-2 text-sm outline-none focus:border-accent"
+            className="mt-4 w-full resize-y rounded-xl border border-line bg-canvas px-3.5 py-2.5 text-[16px] leading-snug text-ink outline-none transition placeholder:text-muted/70 focus:border-muted"
           />
         ) : (
           <input
+            data-lh="answer-other"
             value={other}
             onChange={(e) => setOther(e.target.value)}
-            placeholder={selected.length ? "Add detail (optional)" : "Other: say it in your own words"}
-            className="w-full rounded-xl border border-line px-3 py-2 text-sm outline-none focus:border-accent"
+            onKeyDown={enterSubmits}
+            placeholder={selected.length ? "Add detail (optional)" : "Something else? Say it in your own words"}
+            className="mt-2 w-full rounded-xl border border-dashed border-line bg-transparent px-3.5 py-2.5 text-[15px] text-ink outline-none transition placeholder:text-muted/70 focus:border-solid focus:border-muted"
           />
         )}
-        <textarea
-          value={thinking}
-          onChange={(e) => setThinking(e.target.value)}
-          rows={thinking ? 3 : 1}
-          placeholder="Think out loud (optional): why, doubts, what makes this hard…"
-          className="w-full resize-y rounded-xl border border-dashed border-line bg-gray-50/60 px-3 py-2 text-sm outline-none focus:border-accent focus:bg-white"
-        />
-        {args.askConfidence && (
-          <div className="rounded-xl bg-gray-50 px-3 py-2">
-            <div className="flex items-center justify-between text-xs text-muted">
-              <span>{args.confidenceLabel ?? "How sure are you?"}</span>
-              <span className={`font-semibold ${confidence == null ? "text-amber-600" : "text-ink"}`}>{confidence == null ? "drag to set" : `${confidence}%`}</span>
-            </div>
+      </div>
+
+      {args.askConfidence && (
+        <div className="flex items-center gap-4 border-t border-line px-5 py-3">
+          <Label className="shrink-0">{args.confidenceLabel ? "Confidence" : "How sure?"}</Label>
+          <div className="relative flex-1">
             <input
               type="range"
+              data-lh="confidence"
               min={0}
               max={100}
               step={5}
               value={confidence ?? 50}
               onChange={(e) => setConfidence(Number(e.target.value))}
               onMouseDown={() => confidence == null && setConfidence(50)}
-              className="mt-1 w-full accent-[#5b4bd6]"
+              className={cx("lh-range w-full", confidence == null && "opacity-50")}
+              title={args.confidenceLabel}
             />
           </div>
-        )}
-      </div>
+          <span className={cx("lh-mono w-20 shrink-0 text-right text-[12px]", confidence == null ? "text-warn" : "text-ink")}>{confidence == null ? "drag to set" : `${confidence}%`}</span>
+        </div>
+      )}
+      {args.askConfidence && args.confidenceLabel && <p className="-mt-1.5 px-5 pb-2 text-xs text-muted">{args.confidenceLabel}</p>}
 
-      <div className="mt-3 flex items-center justify-between">
-        <button type="button" disabled={busy} onClick={() => onSubmit({ skipped: true })} className="text-xs text-muted hover:text-ink disabled:opacity-40">
-          Skip / I don&apos;t know
-        </button>
-        <div className="flex items-center gap-2">
-          <span className="hidden text-[11px] text-muted sm:inline">Ctrl+Enter</span>
-          <button
-            type="button"
-            disabled={!canSubmit}
-            onClick={submit}
-            className="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:opacity-35"
-          >
-            Answer
-          </button>
+      <div className="border-t border-line bg-canvas/40 px-5 pb-3 pt-3">
+        <Label>Your thinking</Label>
+        <textarea
+          data-lh="thinking"
+          value={thinking}
+          onChange={(e) => setThinking(e.target.value)}
+          onKeyDown={enterSubmits}
+          rows={thinking.length > 80 ? 3 : 1}
+          placeholder="Why? Doubts? Whatever comes to mind (optional)"
+          className="mt-1 w-full resize-none bg-transparent text-[15px] leading-snug text-ink outline-none placeholder:text-muted/70"
+        />
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <span className="lh-mono hidden items-center gap-1.5 text-[11px] text-muted sm:flex">
+            <Kbd>↵</Kbd> answers · <Kbd>⇧↵</Kbd> newline{options.length > 0 && <> · <Kbd>1</Kbd>–<Kbd>{options.length}</Kbd> pick</>}
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="ghost" size="sm" disabled={busy} onClick={() => onSubmit({ skipped: true })}>
+              Skip
+            </Button>
+            <Button variant="primary" size="sm" disabled={!canSubmit} onClick={submit} className="px-4" data-lh="submit">
+              Answer
+            </Button>
+          </div>
         </div>
       </div>
     </div>

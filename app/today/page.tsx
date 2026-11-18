@@ -1,16 +1,21 @@
 "use client";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import PageHeader from "@/components/PageHeader";
+import { refreshSidebar } from "@/components/Shell";
+import { Button, cx, Empty, IconButton, Label, Spinner } from "@/components/ui";
+import { tint } from "@/components/WeekGrid";
 import { getJson, postJson } from "@/lib/api";
 import { addDays, fmt, fmtDuration } from "@/src/core/time";
-import { CATEGORIES, type DaySchedule, type Mark, type MarkStatus, type Plan, type ScheduledBlock, type WeekSchedule } from "@/src/core/types";
+import { CATEGORIES, type Mark, type MarkStatus, type Plan, type ScheduledBlock, type WeekSchedule } from "@/src/core/types";
 
 type Week = WeekSchedule & { today: string; nowMin: number; tz: string; marks: Record<string, Record<string, Mark>> };
 
-const BTN: { s: MarkStatus; label: string; on: string }[] = [
-  { s: "done", label: "✓", on: "bg-emerald-500 text-white border-emerald-500" },
-  { s: "half", label: "½", on: "bg-amber-400 text-white border-amber-400" },
-  { s: "skip", label: "✗", on: "bg-rose-500 text-white border-rose-500" },
+const BTN: { s: MarkStatus; label: string; on: string; title: string }[] = [
+  { s: "done", label: "✓", on: "border-ok bg-ok text-canvas", title: "Done" },
+  { s: "half", label: "½", on: "border-warn bg-warn text-canvas", title: "Half" },
+  { s: "skip", label: "✗", on: "border-danger bg-danger text-canvas", title: "Skipped" },
 ];
 
 export default function Today() {
@@ -56,6 +61,7 @@ export default function Today() {
     setWeek({ ...week, marks });
     try {
       await postJson("/api/track", { date: day.date, key: b.key, status });
+      refreshSidebar();
     } catch (e) {
       setErr((e as Error).message);
       load(week.start);
@@ -64,16 +70,31 @@ export default function Today() {
 
   if (plan === null) {
     return (
-      <div className="mx-auto max-w-xl px-6 py-20 text-center">
-        <h1 className="text-2xl font-semibold">No plan yet</h1>
-        <p className="mt-2 text-muted">Start with the interview; your Today view appears once you adopt a plan.</p>
-        <Link href="/start" className="mt-6 inline-block rounded-xl bg-accent px-5 py-2.5 font-medium text-white">
-          Start →
-        </Link>
-      </div>
+      <>
+        <PageHeader title="Today" />
+        <Empty
+          title="No plan yet"
+          action={
+            <Link href="/start">
+              <Button variant="accent" size="lg">
+                Start the interview →
+              </Button>
+            </Link>
+          }
+        >
+          Your day appears here once you&apos;ve adopted a plan.
+        </Empty>
+      </>
     );
   }
-  if (!week || !day) return <div className="p-10 text-center text-muted">{err ?? "Loading…"}</div>;
+  if (!week || !day) {
+    return (
+      <>
+        <PageHeader title="Today" />
+        <div className="grid flex-1 place-items-center text-muted">{err ?? <Spinner />}</div>
+      </>
+    );
+  }
 
   const isToday = day.date === week.today;
   const isPast = day.date < week.today;
@@ -91,127 +112,148 @@ export default function Today() {
   const label = new Date(`${day.date}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
 
   return (
-    <div className="mx-auto max-w-3xl px-5 py-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{isToday ? "Today" : label}</h1>
-          <p className="text-sm text-muted">
-            {isToday ? `${label} · ${fmt(week.nowMin)}` : isPast ? "Past day: you can still mark it" : "Upcoming"}
-            {day.planVersion ? ` · plan v${day.planVersion}` : ""}
-          </p>
-        </div>
-        <div className="flex items-center gap-1">
-          <button type="button" onClick={() => go(-1)} className="rounded-lg border border-line bg-white px-3 py-1.5 text-sm hover:bg-gray-50">
-            ←
-          </button>
-          {!isToday && (
-            <button type="button" onClick={() => { setDate(week.today); if (!week.days.some((d) => d.date === week.today)) load(); }} className="rounded-lg border border-line bg-white px-3 py-1.5 text-sm hover:bg-gray-50">
-              Today
-            </button>
+    <>
+      <PageHeader
+        title={isToday ? "Today" : label}
+        meta={isToday ? `${label} · ${fmt(week.nowMin)}` : isPast ? "past day · still markable" : "upcoming"}
+        right={
+          <>
+            <IconButton onClick={() => go(-1)} title="Previous day">
+              <ChevronLeft />
+            </IconButton>
+            {!isToday && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setDate(week.today);
+                  if (!week.days.some((d) => d.date === week.today)) load();
+                }}
+              >
+                Today
+              </Button>
+            )}
+            <IconButton onClick={() => go(1)} title="Next day">
+              <ChevronRight />
+            </IconButton>
+          </>
+        }
+      />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-[860px] px-6 pb-12 pt-6">
+          {isToday && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <NowCard label="Now" block={current} goals={goals} nowMin={week.nowMin} />
+              <NowCard label="Next" block={next} goals={goals} nowMin={week.nowMin} />
+            </div>
           )}
-          <button type="button" onClick={() => go(1)} className="rounded-lg border border-line bg-white px-3 py-1.5 text-sm hover:bg-gray-50">
-            →
-          </button>
+
+          <div className="mt-6 flex items-center gap-4 border-b border-line pb-3">
+            <Label>
+              <span className="text-ok">{c.done} done</span> · <span className="text-warn">{c.half} half</span> · <span className="text-danger">{c.skip} skipped</span> · {counted.length - marked} to mark
+            </Label>
+            {score != null && <span className="lh-title ml-auto text-xl">{score}%</span>}
+          </div>
+
+          <ol className="mt-3 space-y-1">
+            {visible.map((b) => {
+              const m = dm[b.key];
+              const active = b === current;
+              const started = isPast || (isToday && b.start <= now);
+              const color = CATEGORIES[b.category].color;
+              return (
+                <li
+                  key={b.key + b.start}
+                  className={cx(
+                    "group flex items-center gap-4 rounded-xl px-3 py-2.5 transition",
+                    active ? "bg-selected ring-1 ring-accent/50" : "hover:bg-hover",
+                    b.overlay && "ml-10",
+                    m?.status === "skip" && "opacity-55",
+                  )}
+                >
+                  <div className="lh-mono w-[88px] shrink-0 text-[12px] text-muted">
+                    {fmt(b.start)}–{fmt(b.end)}
+                  </div>
+                  <span className="h-9 w-[3px] shrink-0 rounded-full" style={{ background: color }} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[15px] text-ink">
+                      {b.core && <span className="mr-1 text-accent">★</span>}
+                      {b.title}
+                    </div>
+                    <div className="truncate text-sm text-muted" title={[b.note, b.ifThen && `If-then: ${b.ifThen}`].filter(Boolean).join("\n")}>
+                      {[b.goalId && goals[b.goalId], b.ifThen ? `If-then: ${b.ifThen}` : b.note].filter(Boolean).join(" · ") || CATEGORIES[b.category].label}
+                    </div>
+                  </div>
+                  {b.tracked && (isPast || isToday) && (
+                    <div className={cx("flex shrink-0 gap-1", !started && !m && "opacity-35 group-hover:opacity-80")}>
+                      {BTN.map((x) => (
+                        <button
+                          type="button"
+                          key={x.s}
+                          onClick={() => mark(b, x.s)}
+                          title={x.title}
+                          className={cx("lh-mono h-8 w-8 rounded-lg border text-[13px] font-semibold transition", m?.status === x.s ? x.on : "border-line text-muted hover:border-muted hover:text-ink")}
+                        >
+                          {x.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+          <p className="lh-mono mt-6 text-[11px] text-muted">
+            Awake {fmt(day.wake)}–{fmt(day.bed)} · planned {fmtDuration(visible.filter((b) => !b.overlay).reduce((s, b) => s + b.end - b.start, 0))} · honest marks beat perfect ones
+          </p>
+          {err && <p className="mt-2 text-sm text-danger">{err}</p>}
         </div>
       </div>
-
-      {isToday && (
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <NowCard label="Now" block={current} goals={goals} nowMin={week.nowMin} />
-          <NowCard label="Next" block={next} goals={goals} nowMin={week.nowMin} />
-        </div>
-      )}
-
-      <div className="mt-5 flex flex-wrap items-center gap-4 rounded-xl border border-line bg-white px-4 py-3 text-sm">
-        <span>
-          <b className="text-emerald-600">{c.done}</b> done · <b className="text-amber-500">{c.half}</b> half · <b className="text-rose-500">{c.skip}</b> skipped ·{" "}
-          <b className="text-muted">{counted.length - marked}</b> to mark
-        </span>
-        {score != null && <span className="ml-auto font-semibold">{score}%</span>}
-      </div>
-
-      <ol className="mt-4 space-y-1.5">
-        {visible.map((b) => {
-          const m = dm[b.key];
-          const active = b === current;
-          const started = isPast || (isToday && b.start <= now);
-          return (
-            <li
-              key={b.key + b.start}
-              className={`flex items-center gap-3 rounded-xl border bg-white px-3 py-2 ${active ? "border-accent ring-2 ring-accent/20" : "border-line"} ${b.overlay ? "ml-8" : ""} ${
-                m?.status === "skip" ? "opacity-60" : ""
-              }`}
-            >
-              <div className="w-[92px] shrink-0 text-xs tabular-nums text-muted">
-                {fmt(b.start)}–{fmt(b.end)}
-              </div>
-              <span className="h-8 w-1 shrink-0 rounded-full" style={{ background: CATEGORIES[b.category].color }} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">
-                  {b.core && <span title="non-negotiable">★ </span>}
-                  {b.title}
-                </div>
-                <div className="truncate text-xs text-muted" title={[b.note, b.ifThen && `If-then: ${b.ifThen}`].filter(Boolean).join("\n")}>
-                  {[b.goalId && goals[b.goalId], b.ifThen ? `If-then: ${b.ifThen}` : b.note].filter(Boolean).join(" · ") || CATEGORIES[b.category].label}
-                </div>
-              </div>
-              {b.tracked && (isPast || isToday) && (
-                <div className={`flex shrink-0 gap-1 ${started || m ? "" : "opacity-40"}`}>
-                  {BTN.map((x) => (
-                    <button
-                      type="button"
-                      key={x.s}
-                      onClick={() => mark(b, x.s)}
-                      title={x.s}
-                      className={`h-8 w-8 rounded-lg border text-sm font-semibold transition ${m?.status === x.s ? x.on : "border-line text-muted hover:border-gray-400 hover:text-ink"}`}
-                    >
-                      {x.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-      <p className="mt-4 text-xs text-muted">
-        Awake {fmt(day.wake)}–{fmt(day.bed)} · planned {fmtDuration(visible.filter((b) => !b.overlay).reduce((s, b) => s + b.end - b.start, 0))}. Marks feed the weekly review: honest marks
-        beat perfect ones.
-      </p>
-      {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
-    </div>
+    </>
   );
 }
 
 function NowCard({ label, block, goals, nowMin }: { label: string; block?: ScheduledBlock; goals: Record<string, string>; nowMin: number }) {
   if (!block) {
     return (
-      <div className="rounded-2xl border border-dashed border-line bg-white/60 px-4 py-3">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-muted">{label}</div>
-        <div className="mt-1 text-sm text-muted">{label === "Now" ? "Free time" : "Nothing else today"}</div>
+      <div className="rounded-2xl border border-dashed border-line px-5 py-4">
+        <Label>{label}</Label>
+        <div className="mt-1.5 text-[15px] text-muted">{label === "Now" ? "Free time" : "Nothing else today"}</div>
       </div>
     );
   }
   const color = CATEGORIES[block.category].color;
-  const left = label === "Now" ? block.end - nowMin : block.start - nowMin;
+  const isNow = label === "Now";
+  const left = isNow ? block.end - nowMin : block.start - nowMin;
   return (
-    <div className="rounded-2xl border border-line bg-white px-4 py-3" style={{ borderLeft: `5px solid ${color}` }}>
-      <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-muted">
-        {label}
-        <span className="normal-case tracking-normal">{label === "Now" ? `${fmtDuration(left)} left` : `in ${fmtDuration(left)}`}</span>
+    <div className="rounded-2xl border border-line bg-panel px-5 py-4">
+      <div className="flex items-center justify-between">
+        <Label className={isNow ? "text-accent" : ""}>{label}</Label>
+        <span className="lh-mono text-[11px] text-muted">{isNow ? `${fmtDuration(left)} left` : `in ${fmtDuration(left)}`}</span>
       </div>
-      <div className="mt-1 font-semibold">
-        {block.core && "★ "}
-        {block.title}
+      <div className="mt-2 flex items-center gap-2.5">
+        <span className="h-5 w-[3px] shrink-0 rounded-full" style={{ background: color }} />
+        <span className="truncate text-lg font-semibold text-ink">
+          {block.core && <span className="mr-1 text-accent">★</span>}
+          {block.title}
+        </span>
       </div>
-      <div className="text-xs text-muted">
+      <div className="lh-mono mt-1 text-[11.5px] text-muted">
         {fmt(block.start)}–{fmt(block.end)}
         {block.goalId && goals[block.goalId] ? ` · ${goals[block.goalId]}` : ""}
       </div>
-      {block.ifThen && <div className="mt-1.5 rounded-lg bg-accent-soft px-2 py-1 text-xs text-accent">If-then: {block.ifThen}</div>}
-      {!block.ifThen && block.note && <div className="mt-1.5 text-xs text-muted">{block.note}</div>}
+      {isNow && (
+        <div className="mt-3 h-1 overflow-hidden rounded-full bg-hover">
+          <div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(((nowMin - block.start) / (block.end - block.start)) * 100)}%` }} />
+        </div>
+      )}
+      {block.ifThen && (
+        <div className="mt-3 rounded-lg px-3 py-2 text-sm text-ink" style={tint(color, 14)}>
+          <span className="lh-mono mr-1 text-[10.5px] uppercase tracking-[0.07em] text-muted">if-then</span>
+          {block.ifThen}
+        </div>
+      )}
+      {!block.ifThen && block.note && <div className="mt-2 text-sm text-muted">{block.note}</div>}
     </div>
   );
 }
-
-export type { DaySchedule };

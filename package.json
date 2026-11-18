@@ -11,12 +11,16 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "smoke": "tsx scripts/smoke-agent.ts",
-    "shots": "tsx scripts/screenshots.ts"
+    "shots": "tsx scripts/screenshots.ts",
+    "desktop": "node scripts/desktop-dev.mjs",
+    "desktop:build": "node scripts/desktop-build.mjs",
+    "icons": "tsx scripts/render-icons.ts"
   },
   "dependencies": {
     "@earendil-works/pi-ai": "1.5.2",
     "@earendil-works/pi-coding-agent": "1.5.2",
     "adhan": "^4.4.6",
+    "lucide-react": "^1.75.0",
     "next": "16.4.6",
     "react": "19.3.1",
     "react-dom": "19.3.1",
@@ -28,10 +32,15 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "electron": "^45.3.4",
+    "electron-builder": "^26.18.0",
     "playwright-core": "^1.65.1",
     "tailwindcss": "^4.3.5",
     "tsx": "^4",
     "typescript": "5.9.3",
     "vitest": "^5.1.0"
-  }
+  },
+  "main": "electron/main.cjs",
+  "author": "LifeHarness",
+  "homepage": "https://lifeharness.invalid"
 }

@@ -1,10 +1,14 @@
 "use client";
+import { ArrowUp, Check, PanelRight } from "lucide-react";
 import Link from "next/link";
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import LifeMap from "@/components/LifeMap";
 import Markdown from "@/components/Markdown";
+import PageHeader from "@/components/PageHeader";
 import PlanPanel from "@/components/PlanPanel";
 import QuestionDock from "@/components/QuestionDock";
+import { refreshSidebar } from "@/components/Shell";
+import { Button, cx, IconButton, Label, Segmented, Spinner } from "@/components/ui";
 import { getJson, postJson, streamTurn, type ChatView } from "@/lib/api";
 import type { Strand } from "@/src/core/profile";
 import type { Plan, Profile } from "@/src/core/types";
@@ -12,18 +16,25 @@ import type { QuestionAnswer } from "@/src/server/store";
 import type { ViewItem } from "@/src/server/view";
 
 type ProfileState = { profile: Profile; coverage: Strand[] };
+const PHASE_LABEL = { intake: "Interview", plan: "Plan", review: "Review" } as const;
 
 export default function SessionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const [chat, setChat] = useState<(ChatView & { busy?: boolean }) | null>(null);
+  const [chat, setChat] = useState<ChatView | null>(null);
   const [life, setLife] = useState<ProfileState | null>(null);
   const [live, setLive] = useState<{ text: string; status: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"map" | "plan">("map");
+  const [panel, setPanel] = useState(true);
   const [draft, setDraft] = useState("");
   const started = useRef(false);
   const lastProposal = useRef<string | null>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setPanel(window.innerWidth >= 1180);
+  }, []);
 
   const refreshLife = useCallback(() => {
     getJson<ProfileState>("/api/profile").then(setLife).catch(() => {});
@@ -33,12 +44,12 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
     async (input: unknown, optimistic?: (c: ChatView) => ChatView) => {
       setBusy(true);
       setError(null);
-      setLive({ text: "", status: "Thinking…" });
+      setLive({ text: "", status: "Thinking" });
       if (optimistic) setChat((c) => (c ? { ...optimistic(c) } : c));
       try {
         await streamTurn(id, input, (e) => {
           if (e.type === "text") setLive((l) => ({ text: (l?.text ?? "") + e.delta, status: "" }));
-          else if (e.type === "status") setLive((l) => ({ text: l?.text ?? "", status: e.text }));
+          else if (e.type === "status") setLive((l) => ({ text: l?.text ?? "", status: e.text.replace(/…$/, "") }));
           else if (e.type === "tool") refreshLife();
           else if (e.type === "chat") {
             setChat(e.chat);
@@ -51,14 +62,17 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
         setBusy(false);
         setLive(null);
         refreshLife();
+        refreshSidebar();
       }
     },
     [id, refreshLife],
   );
 
-  // Load, then auto-start a fresh session.
   useEffect(() => {
-    getJson<ChatView & { busy?: boolean }>(`/api/chats/${id}`)
+    started.current = false;
+    lastProposal.current = null;
+    setChat(null);
+    getJson<ChatView>(`/api/chats/${id}`)
       .then((c) => {
         setChat(c);
         const fresh = !c.items.length && !c.pending && !c.canContinue && !c.lastError;
@@ -71,18 +85,18 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
     refreshLife();
   }, [id, run, refreshLife]);
 
-  // A new proposal: show the Plan tab.
   useEffect(() => {
     const p = chat?.proposal?.toolCallId ?? null;
     if (p && p !== lastProposal.current) {
-      if (lastProposal.current !== null || chat?.phase !== "intake") setTab("plan");
+      setTab("plan");
+      setPanel(true);
       lastProposal.current = p;
     }
-  }, [chat?.proposal?.toolCallId, chat?.phase]);
+  }, [chat?.proposal?.toolCallId]);
 
-  // Follow the conversation.
   useEffect(() => {
-    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    const el = scroller.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [chat?.items.length, live?.text, chat?.pending?.toolCallId]);
 
   const answer = (a: QuestionAnswer) => {
@@ -94,14 +108,12 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
       items: c.items.map((it) => (it.kind === "question" && it.id === pend.toolCallId ? { ...it, answer: a, open: false } : it)),
     }));
   };
-
   const send = () => {
     const text = draft.trim();
     if (!text || busy) return;
     setDraft("");
     run({ type: "message", text }, (c) => ({ ...c, items: [...c.items, { kind: "user", id: `tmp${Date.now()}`, text }] }));
   };
-
   const adopt = async () => {
     try {
       const plan = await postJson<Plan>("/api/plan/adopt", { chatId: id });
@@ -117,195 +129,229 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   };
 
   if (!chat) {
-    return <div className="p-10 text-center text-muted">{error ?? "Loading…"}</div>;
+    return (
+      <>
+        <PageHeader title=" " />
+        <div className="grid flex-1 place-items-center text-muted">{error ?? <Spinner />}</div>
+      </>
+    );
   }
 
   const step = chat.kind === "review" ? -1 : chat.proposal?.adoptedVersion ? 2 : chat.phase === "plan" ? 1 : 0;
+  const qCount = chat.items.filter((i) => i.kind === "question").length;
   const pending = chat.pending;
 
   return (
-    <div className="mx-auto flex max-w-[1500px] gap-6 px-5">
-      <section className="flex min-h-[calc(100vh-3.25rem)] min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between gap-3 py-4">
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight">{chat.title}</h1>
-            <p className="text-xs text-muted">
-              {chat.usage.calls} model calls · ≈${chat.usage.cost.toFixed(2)}
-            </p>
-          </div>
-          {step >= 0 && (
-            <ol className="flex items-center gap-1 text-xs">
-              {["Interview", "Plan", "Adopted"].map((s, i) => (
-                <li key={s} className="flex items-center gap-1">
-                  <span className={`rounded-full px-2.5 py-1 font-medium ${i === step ? "bg-accent text-white" : i < step ? "bg-accent-soft text-accent" : "bg-gray-100 text-muted"}`}>
-                    {i < step ? "✓ " : ""}
-                    {s}
-                  </span>
-                  {i < 2 && <span className="text-gray-300">—</span>}
-                </li>
+    <>
+      <PageHeader
+        title={chat.title}
+        meta={`${chat.usage.calls} calls · $${chat.usage.cost.toFixed(2)}`}
+        right={
+          <>
+            {busy && <Spinner className="mr-1" />}
+            {step >= 0 ? (
+              <ol className="lh-mono flex items-center gap-1.5 text-[11px] uppercase tracking-[0.07em]">
+                {["Interview", "Plan", "Adopted"].map((s, i) => (
+                  <li key={s} className="flex items-center gap-1.5">
+                    <span className={cx("flex items-center gap-1", i === step ? "text-ink" : i < step ? "text-muted" : "text-muted/50")}>
+                      {i < step ? <Check className="h-3 w-3" /> : i === step ? <span className="h-1.5 w-1.5 rounded-full bg-accent" /> : null}
+                      {s}
+                    </span>
+                    {i < 2 && <span className="text-muted/40">›</span>}
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <span className="lh-label">{PHASE_LABEL[chat.phase]}</span>
+            )}
+            <IconButton onClick={() => setPanel((p) => !p)} active={panel} title="Life map & plan panel" className="ml-2">
+              <PanelRight />
+            </IconButton>
+          </>
+        }
+      />
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto max-w-[760px] space-y-5 px-6 pb-10 pt-7">
+              {chat.items.map((it, i) => (
+                <Item key={it.id} item={it} n={chat.items.slice(0, i + 1).filter((x) => x.kind === "question").length} />
               ))}
-            </ol>
-          )}
-        </div>
-
-        <div className="flex-1 space-y-4 pb-6">
-          {chat.items.map((it) => (
-            <Item key={it.id} item={it} />
-          ))}
-          {live && (live.text || live.status) && (
-            <div>
-              {live.text && <Markdown className="text-[15px]">{live.text}</Markdown>}
-              {live.status && (
-                <p className="lh-dots mt-1 text-sm text-muted">
-                  {live.status.replace(/…$/, "")}
-                  <span>.</span>
-                  <span>.</span>
-                  <span>.</span>
-                </p>
+              {live && (live.text || live.status) && (
+                <div>
+                  {live.text && <Markdown>{live.text}</Markdown>}
+                  {live.status && (
+                    <p className="lh-dots lh-mono mt-1 text-[11px] uppercase tracking-[0.08em] text-muted">
+                      {live.status}
+                      <span>.</span>
+                      <span>.</span>
+                      <span>.</span>
+                    </p>
+                  )}
+                </div>
+              )}
+              {chat.proposal?.adoptedVersion && !busy && (
+                <div className="flex flex-wrap items-center gap-3 rounded-xl border border-ok/40 px-4 py-3 text-[15px]">
+                  <Check className="h-4 w-4 text-ok" /> Plan v{chat.proposal.adoptedVersion} is live.
+                  <Link href="/today" className="lh-mono text-[11px] uppercase tracking-[0.07em] text-accent hover:underline">
+                    Open today →
+                  </Link>
+                  <Link href="/week" className="lh-mono text-[11px] uppercase tracking-[0.07em] text-accent hover:underline">
+                    See the week →
+                  </Link>
+                </div>
               )}
             </div>
-          )}
-          {chat.proposal?.adoptedVersion && !busy && (
-            <div className="flex flex-wrap gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-              Plan v{chat.proposal.adoptedVersion} is live.
-              <Link href="/today" className="font-semibold underline">
-                Open Today →
-              </Link>
-              <Link href="/week" className="font-semibold underline">
-                See the week →
-              </Link>
-            </div>
-          )}
-        </div>
+          </div>
 
-        <div className="sticky bottom-0 bg-gradient-to-t from-paper via-paper to-paper/0 pb-5 pt-3">
-          {error && (
-            <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-              <span className="min-w-0 break-words">{error}</span>
-              {chat.canContinue && !busy && (
-                <button type="button" onClick={() => run({ type: "continue" })} className="shrink-0 rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white">
-                  Retry
-                </button>
+          <div className="shrink-0 px-6 pb-5">
+            <div className="mx-auto max-w-[760px]">
+              {error && (
+                <div className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-danger/40 px-4 py-2.5 text-sm">
+                  <span className="min-w-0 break-words text-danger">{error}</span>
+                  {chat.canContinue && !busy && (
+                    <Button size="sm" variant="danger" onClick={() => run({ type: "continue" })}>
+                      Retry
+                    </Button>
+                  )}
+                </div>
+              )}
+              {!error && chat.canContinue && !busy && (
+                <div className="mb-2 flex items-center justify-between rounded-xl border border-line px-4 py-2.5 text-sm">
+                  <span className="text-muted">The coach stopped mid-way.</span>
+                  <Button size="sm" variant="primary" onClick={() => run({ type: "continue" })}>
+                    Continue
+                  </Button>
+                </div>
+              )}
+              {pending ? (
+                <QuestionDock key={pending.toolCallId} args={pending.args} busy={busy} label={`${PHASE_LABEL[chat.phase]} · Q${qCount}`} onSubmit={answer} />
+              ) : (
+                <div className="flex items-end gap-2 rounded-2xl border border-line bg-panel p-2 pl-4 shadow-[0_18px_50px_-28px_rgba(0,0,0,0.55)]">
+                  <textarea
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        send();
+                      }
+                    }}
+                    rows={1}
+                    disabled={busy}
+                    placeholder={busy ? "The coach is working…" : chat.proposal && !chat.proposal.adoptedVersion ? "Ask for changes, e.g. “move workouts to the evening”" : "Write to your coach…"}
+                    className="max-h-40 min-h-[40px] flex-1 resize-none bg-transparent py-2 text-[16px] leading-snug text-ink outline-none placeholder:text-muted/70"
+                  />
+                  <IconButton onClick={send} disabled={busy || !draft.trim()} title="Send (Enter)" className="h-10 w-10 rounded-xl bg-ink text-canvas hover:bg-ink hover:text-canvas hover:opacity-90">
+                    <ArrowUp />
+                  </IconButton>
+                </div>
               )}
             </div>
-          )}
-          {!error && chat.canContinue && !busy && (
-            <div className="mb-2 flex items-center justify-between rounded-lg border border-line bg-white px-3 py-2 text-sm">
-              <span className="text-muted">The agent stopped mid-way.</span>
-              <button type="button" onClick={() => run({ type: "continue" })} className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white">
-                Continue
-              </button>
-            </div>
-          )}
-          {pending ? (
-            <QuestionDock key={pending.toolCallId} args={pending.args} busy={busy} onSubmit={answer} />
-          ) : (
-            <div className="flex items-end gap-2 rounded-2xl border border-line bg-white p-2 shadow-sm">
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    send();
-                  }
-                }}
-                rows={1}
-                disabled={busy}
-                placeholder={busy ? "Working…" : chat.proposal && !chat.proposal.adoptedVersion ? "Ask for changes, e.g. “move workouts to the evening”" : "Write a message…"}
-                className="max-h-40 min-h-[40px] flex-1 resize-y bg-transparent px-2 py-2 text-sm outline-none"
-              />
-              <button type="button" onClick={send} disabled={busy || !draft.trim()} className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-35">
-                Send
-              </button>
-            </div>
-          )}
+          </div>
         </div>
-      </section>
 
-      <aside className="scroll-thin sticky top-[4.25rem] my-4 hidden h-[calc(100vh-5.5rem)] w-[470px] shrink-0 overflow-y-auto rounded-2xl border border-line bg-white p-4 lg:block">
-        <div className="mb-3 flex gap-1 rounded-lg bg-gray-100 p-1 text-sm">
-          {(["map", "plan"] as const).map((t) => (
-            <button
-              type="button"
-              key={t}
-              onClick={() => setTab(t)}
-              className={`flex-1 rounded-md py-1.5 font-medium transition ${tab === t ? "bg-white shadow-sm" : "text-muted hover:text-ink"}`}
-            >
-              {t === "map" ? "Life map" : "Plan"}
-              {t === "plan" && chat.proposal && !chat.proposal.adoptedVersion && <span className="ml-1.5 inline-block h-2 w-2 rounded-full bg-accent" />}
-            </button>
-          ))}
-        </div>
-        {tab === "map" ? (
-          life ? (
-            <LifeMap profile={life.profile} strands={chat.phase === "intake" ? life.coverage : undefined} compact />
-          ) : (
-            <p className="text-sm text-muted">Loading…</p>
-          )
-        ) : chat.proposal ? (
-          <PlanPanel proposal={chat.proposal} busy={busy} onAdopt={adopt} />
-        ) : (
-          <p className="py-6 text-center text-sm text-muted">The plan appears here once the interview is done.</p>
+        {panel && (
+          <aside className="w-[440px] shrink-0 overflow-y-auto border-l border-line px-5 py-4">
+            <Segmented
+              className="mb-5 flex w-full"
+              value={tab}
+              onChange={setTab}
+              options={[
+                { value: "map", label: "Life map" },
+                {
+                  value: "plan",
+                  label: (
+                    <span className="inline-flex items-center gap-1.5">
+                      Plan{chat.proposal && !chat.proposal.adoptedVersion && <span className="h-1.5 w-1.5 rounded-full bg-accent" />}
+                    </span>
+                  ),
+                },
+              ]}
+            />
+            {tab === "map" ? (
+              life ? (
+                <LifeMap profile={life.profile} strands={chat.phase === "intake" ? life.coverage : undefined} compact />
+              ) : (
+                <Spinner />
+              )
+            ) : chat.proposal ? (
+              <PlanPanel proposal={chat.proposal} busy={busy} onAdopt={adopt} />
+            ) : (
+              <p className="py-10 text-center text-[14px] text-muted">The plan appears here once the interview is done.</p>
+            )}
+          </aside>
         )}
-      </aside>
-    </div>
+      </div>
+    </>
   );
 }
 
-function Item({ item }: { item: ViewItem }) {
+function Item({ item, n }: { item: ViewItem; n: number }) {
   switch (item.kind) {
     case "user":
       return (
-        <div className="flex justify-end">
-          <div className="max-w-[75%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-accent px-3.5 py-2 text-sm text-white">{item.text}</div>
+        <div className="rounded-r-lg border-l-2 border-muted/60 bg-panel px-4 py-2.5">
+          <Label>You</Label>
+          <div className="mt-0.5 whitespace-pre-wrap text-[15px] leading-snug text-ink">{item.text}</div>
         </div>
       );
     case "assistant":
-      return <Markdown className="text-[15px]">{item.text}</Markdown>;
+      return <Markdown>{item.text}</Markdown>;
     case "question":
-      if (item.open) return null; // shown in the dock
+      if (item.open) return null;
       return (
-        <div className="rounded-xl border border-line bg-white px-3.5 py-2.5">
-          <Markdown className="text-sm font-medium text-ink/80">{item.args.question}</Markdown>
-          {item.answer ? <AnswerView a={item.answer} /> : <p className="text-xs text-muted">(unanswered)</p>}
+        <div className="rounded-xl border border-line px-4 py-3">
+          <Label>Q{n}</Label>
+          <Markdown small className="mt-0.5 text-muted">
+            {item.args.question}
+          </Markdown>
+          {item.answer ? <AnswerView a={item.answer} /> : <p className="mt-1 text-sm text-muted">Unanswered</p>}
         </div>
       );
     case "activity":
       return (
-        <div className={`flex items-start gap-2 text-xs ${item.error ? "text-amber-700" : "text-muted"}`} title={item.detail}>
-          <span className="mt-px">{item.error ? "↻" : "⚙"}</span>
-          <span className="min-w-0">
-            <span className="font-medium">{item.label}</span>
-            {item.detail && <span className="line-clamp-1"> · {item.detail}</span>}
-          </span>
-        </div>
+        <details className="group">
+          <summary className={cx("lh-mono flex cursor-pointer list-none items-center gap-2 text-[11px] uppercase tracking-[0.07em]", item.error ? "text-warn" : "text-muted hover:text-ink")}>
+            <span className="h-1 w-1 rounded-full bg-current" />
+            {item.label}
+            {item.detail && <span className="transition group-open:rotate-90">›</span>}
+          </summary>
+          {item.detail && <p className="mt-1.5 border-l border-line pl-3 text-sm text-muted">{item.detail}</p>}
+        </details>
       );
     case "divider":
       return (
-        <div className="flex items-center gap-3 py-2 text-xs font-medium uppercase tracking-wider text-accent">
-          <div className="h-px flex-1 bg-accent/25" />
+        <div className="lh-mono flex items-center gap-3 py-2 text-[11px] uppercase tracking-[0.08em] text-accent">
+          <div className="h-px flex-1 bg-line" />
           {item.label}
-          <div className="h-px flex-1 bg-accent/25" />
+          <div className="h-px flex-1 bg-line" />
         </div>
       );
   }
 }
 
 function AnswerView({ a }: { a: QuestionAnswer }) {
-  if (a.skipped) return <p className="mt-1 text-sm italic text-muted">Skipped</p>;
+  if (a.skipped) return <p className="mt-1.5 text-sm italic text-muted">Skipped</p>;
   return (
-    <div className="mt-1.5 space-y-1">
-      <div className="flex flex-wrap gap-1.5">
-        {a.selected?.map((s) => (
-          <span key={s} className="rounded-md bg-accent-soft px-2 py-0.5 text-sm text-accent">
-            {s}
-          </span>
-        ))}
-        {a.confidence != null && <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs leading-5 text-muted">{a.confidence}% sure</span>}
-      </div>
-      {a.other && <p className="whitespace-pre-wrap text-sm">{a.other}</p>}
-      {a.thinking && <p className="whitespace-pre-wrap text-xs italic text-muted">💭 {a.thinking}</p>}
+    <div className="mt-2 space-y-1.5">
+      {(!!a.selected?.length || a.confidence != null) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {a.selected?.map((s) => (
+            <span key={s} className="rounded-md bg-selected px-2 py-0.5 text-[14px] text-ink">
+              {s}
+            </span>
+          ))}
+          {a.confidence != null && <span className="lh-mono rounded-md border border-line px-1.5 py-0.5 text-[11px] text-muted">{a.confidence}% sure</span>}
+        </div>
+      )}
+      {a.other && <p className="whitespace-pre-wrap text-[15px] leading-snug text-ink">{a.other}</p>}
+      {a.thinking && (
+        <p className="whitespace-pre-wrap text-sm leading-snug text-muted">
+          <span className="lh-mono mr-1.5 text-[10.5px] uppercase tracking-[0.07em]">thinking</span>
+          {a.thinking}
+        </p>
+      )}
     </div>
   );
 }

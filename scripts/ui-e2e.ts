@@ -31,42 +31,36 @@ await page.getByRole("button", { name: /Start the interview/ }).click();
 await page.waitForURL(/\/session\//, { timeout: 15000 });
 console.log("session:", page.url());
 
-let lastQuestion = "";
+const questionText = () => page.locator('[data-lh="question"]').innerText().then((t) => t.trim());
+let last = "";
 for (let r = 0; r < rounds; r++) {
-  const answer = page.getByRole("button", { name: "Answer", exact: true });
-  await answer.waitFor({ timeout: 120000 });
-  const dock = answer.locator("xpath=ancestor::div[contains(@class,'rounded-2xl')][1]");
-  const q = (await dock.locator(".prose-lh").first().innerText()).trim();
-  if (q === lastQuestion) throw new Error("question did not advance");
-  lastQuestion = q;
+  await page.locator('[data-lh="dock"]').waitFor({ timeout: 120000 });
+  const q = await questionText();
+  if (q === last) throw new Error("question did not advance");
+  last = q;
   console.log(`\nQ${r + 1}: ${q}`);
-  const textarea = dock.locator("textarea").first();
-  const placeholder = await textarea.getAttribute("placeholder");
-  if (placeholder?.startsWith("Think out loud")) {
-    // options question: pick the first option
-    const first = dock.locator("button").filter({ hasText: /\S/ }).nth(0);
-    console.log("   picking:", (await first.innerText()).split("\n").slice(-1)[0]);
-    await first.click();
+  const options = page.locator('[data-lh="option"]');
+  if (await options.count()) {
+    console.log("   picking:", (await options.first().innerText()).split("\n")[0]);
+    await options.first().click();
   } else {
-    await textarea.fill(answers[r] ?? "Yes, that works.");
+    await page.locator('[data-lh="answer-text"]').fill(answers[r] ?? "Yes, that works.");
     console.log("   typed:", answers[r]);
   }
-  await dock.getByPlaceholder(/Think out loud/).fill("Thinking out loud: mornings are when I'm sharpest.");
-  const slider = dock.locator('input[type="range"]');
+  await page.locator('[data-lh="thinking"]').fill("Thinking out loud: mornings are when I'm sharpest.");
+  const slider = page.locator('[data-lh="confidence"]');
   if (await slider.count()) await slider.fill("70");
   await page.screenshot({ path: `shots/e2e-q${r + 1}.png` });
-  await answer.click();
-  // the answered question moves into the transcript; wait for the agent to finish
-  await page.waitForFunction((prev) => {
-    const btn = [...document.querySelectorAll("button")].find((b) => b.textContent === "Answer");
-    const box = btn?.closest("div.rounded-2xl");
-    const txt = box?.querySelector(".prose-lh")?.textContent?.trim();
-    return !!txt && txt !== prev;
-  }, q, { timeout: 120000 });
+  await page.locator('[data-lh="submit"]').click();
+  await page.waitForFunction(
+    (prev) => {
+      const el = document.querySelector('[data-lh="question"]');
+      return !!el && el.textContent?.trim() !== prev;
+    },
+    q,
+    { timeout: 120000 },
+  );
 }
 await page.screenshot({ path: "shots/e2e-final.png" });
-await page.getByRole("button", { name: "Life map" }).click();
-await page.waitForTimeout(500);
-await page.screenshot({ path: "shots/e2e-lifemap.png" });
 await browser.close();
 console.log("\nOK. Browser errors:", errors.length ? errors : "none");

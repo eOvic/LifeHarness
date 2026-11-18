@@ -1,6 +1,7 @@
 import { availableModels, resolveModel } from "@/src/server/llm";
 import { getSettings, saveSettings, type Settings } from "@/src/server/store";
 import { DATA_DIR } from "@/src/server/store";
+import { THEMES } from "@/src/core/themes";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ export async function POST(req: Request) {
   const next: Settings = { ...getSettings() };
   if (typeof body.model === "string") next.model = body.model || undefined;
   if (body.reasoning && ["minimal", "low", "medium", "high"].includes(body.reasoning)) next.reasoning = body.reasoning;
+  if (typeof body.theme === "string" && THEMES.some((t) => t.id === body.theme)) next.theme = body.theme;
   saveSettings(next);
   return Response.json(next);
 }

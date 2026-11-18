@@ -6,3 +6,5 @@ next-env.d.ts
 /shots/
 .env*
 !.env.example
+desktop-app/
+dist-desktop/
