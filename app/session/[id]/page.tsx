@@ -252,7 +252,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
         </div>
 
         {panel && (
-          <aside className="w-[440px] shrink-0 overflow-y-auto border-l border-line px-5 py-4">
+          <aside className="w-[440px] shrink-0 overflow-y-auto overflow-x-hidden border-l border-line px-5 py-4">
             <Segmented
               className="mb-5 flex w-full"
               value={tab}

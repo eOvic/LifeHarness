@@ -30,7 +30,22 @@ The approach: start with the easiest thing that's genuinely useful, keep it stab
 
   Use the scores to A/B the doctrine.
 
-## Phase 3: a desktop app like LearnHarness
+## Phase 3: a desktop app like LearnHarness 🚧 (shell and packaging done)
+
+Done:
+- A LearnHarness-style redesign: themes, a mono/sans/serif type system, a sidebar shell with a live **Now** card, tinted week, and the new dock (docs/DESIGN.md).
+- An Electron shell: frameless with theme-colored window controls, an embedded standalone server, a hardened renderer, and remembered window state.
+- `.deb` and AppImage via electron-builder; the app icon.
+
+Next:
+- **Auto-update** (electron-updater with a GitHub Releases feed).
+- **System notifications** at block starts and for the evening "mark today".
+- **Tray / top-bar widget.**
+- Start on login.
+- An in-app API-key entry for people without pi.
+- macOS and Windows builds; code signing.
+
+Original plan:
 
 The LearnHarness route:
 - Electron launches the Next **standalone** server (`output: "standalone"`) privately on loopback, then loads it in a sandboxed window.

@@ -105,6 +105,36 @@ Everything is plain JSON under `LIFEHARNESS_DATA_DIR` (default `./data`):
 
 Writes go to a temp file and are then renamed into place. One server process should own a data directory.
 
+## Desktop shell
+
+`electron/main.cjs` turns the web app into a desktop app the same way LearnHarness does.
+
+**Packaged startup.** The shell:
+1. picks a free `127.0.0.1` port;
+2. spawns `resources/server/server.js` (the Next **standalone** build) with `process.execPath` and `ELECTRON_RUN_AS_NODE=1`, so no separate Node install is needed;
+3. sets `LIFEHARNESS_DATA_DIR=~/.config/LifeHarness/data`;
+4. polls `/api/health`, then loads the app;
+5. on quit, stops the server.
+
+**Dev mode.** `npm run desktop` runs `scripts/desktop-dev.mjs`, which starts or reuses `next dev`, warms up its routes, and opens the shell with `LIFEHARNESS_DEV_URL`.
+
+**Window.** It's frameless:
+- On Linux and Windows, `titleBarOverlay` draws the native buttons in the theme's colors. The renderer reports theme changes through the preload bridge (`window.lifeharness.setChrome`).
+- The page's 60px headers are the drag region, and `env(titlebar-area-*)` keeps their content clear of the buttons.
+- The background matches the theme, and the window shows on `ready-to-show`.
+- Size and position are persisted.
+
+**Security.**
+- `contextIsolation`, `sandbox: true`, no Node in the page.
+- Permission requests are denied, except clipboard writes.
+- Navigation is pinned to the app's origin, and external links open in the default browser.
+
+**Packaging.** `npm run desktop:build`:
+1. builds the standalone server (`LIFEHARNESS_STANDALONE=1 next build`);
+2. stages a dependency-free app folder (`desktop-app/`: main, preload, icon);
+3. runs electron-builder, whose `afterPack` hook copies the server, including its traced `node_modules` and Turbopack's relative symlinks, into `resources/server`;
+4. outputs a `.deb` (with an AppArmor profile for Ubuntu 24.04+'s user-namespace restriction) and an AppImage.
+
 ## Credentials
 
 `ModelRuntime.create()` reuses pi's `~/.pi/agent/auth.json` (an API key or a subscription login) and provider environment variables. Set `LIFEHARNESS_AUTH_FILE` to use a separate file. Model choice and reasoning level are set in Settings.
