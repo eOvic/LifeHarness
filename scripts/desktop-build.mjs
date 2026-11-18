@@ -4,6 +4,7 @@
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { copyEngine } from "./server-deps.mjs";
 
 const root = process.cwd();
 const run = (cmd, env = {}) => execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
@@ -19,6 +20,10 @@ fs.cpSync(".next/static", path.join(sa, ".next/static"), { recursive: true });
 if (fs.existsSync("public")) fs.cpSync("public", path.join(sa, "public"), { recursive: true });
 fs.cpSync("prompts", path.join(sa, "prompts"), { recursive: true });
 fs.rmSync(path.join(sa, "data"), { recursive: true, force: true }); // never ship local data
+// The AI engine loads providers and sign-in flows lazily; tracing misses them. Ship it whole.
+const engine = copyEngine(root, sa);
+console.log(`  engine: ${engine.packages} packages (${(engine.bytes / 1e6).toFixed(0)} MB) copied whole`);
+run(`node scripts/verify-server.mjs ${sa}`);
 
 console.log("3/4 stage the Electron app");
 const app = path.join(root, "desktop-app");
@@ -55,4 +60,6 @@ console.log("4/4 electron-builder");
 const extra = process.argv.includes("--dir") ? " --dir" : "";
 fs.rmSync("dist-desktop", { recursive: true, force: true });
 run(`npx electron-builder --linux --publish never${extra}`);
+// Check what actually got packaged (the afterPack copy), not just the staging folder.
+run("node scripts/verify-server.mjs dist-desktop/linux-unpacked/resources/server");
 console.log("\ndone: dist-desktop/");
