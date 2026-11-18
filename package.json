@@ -1,0 +1,37 @@
+{
+  "name": "lifeharness",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An agent harness for self-development: an AI interview turns what you want from life into a week you can actually live.",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3210",
+    "build": "next build",
+    "start": "next start -p 3210",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "smoke": "tsx scripts/smoke-agent.ts",
+    "shots": "tsx scripts/screenshots.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "1.5.2",
+    "@earendil-works/pi-coding-agent": "1.5.2",
+    "adhan": "^4.4.6",
+    "next": "16.4.6",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.5",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "playwright-core": "^1.65.1",
+    "tailwindcss": "^4.3.5",
+    "tsx": "^4",
+    "typescript": "5.9.3",
+    "vitest": "^5.1.0"
+  }
+}
