@@ -21,6 +21,8 @@ export interface ChatView {
   pending: ChatRecord["pending"];
   proposal: Proposal | null;
   usage: ChatRecord["usage"];
+  /** Model calls that got an answer (usage.calls also counts failed attempts). */
+  answeredCalls: number;
   model?: ChatRecord["model"];
   lastError?: string;
   lastErrorAction?: ChatRecord["lastErrorAction"];
@@ -98,6 +100,7 @@ export function chatView(rec: ChatRecord): ChatView {
     pending: rec.pending,
     proposal: rec.proposal,
     usage: rec.usage,
+    answeredCalls: rec.messages.filter((m) => m.role === "assistant" && !["error", "aborted"].includes((m as AssistantMessage).stopReason)).length,
     model: rec.model,
     ...lastErrorView(rec),
     canContinue,

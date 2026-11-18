@@ -418,9 +418,11 @@ function AnswerView({ a }: { a: QuestionAnswer }) {
   );
 }
 
-/** Header line: the model in use, and usage that's honest about subscriptions. */
+/** Header line: the model in use, answered calls, and a cost only when there is one to report. */
 function meta(chat: ChatView): string | undefined {
   const u = chat.usage;
-  const usage = u.calls ? `${u.calls} call${u.calls === 1 ? "" : "s"} · ${u.billing === "subscription" ? "subscription" : `$${u.cost.toFixed(2)}`}` : "";
+  const n = chat.answeredCalls;
+  const cost = u.billing === "subscription" ? "subscription" : u.cost >= 0.005 ? `$${u.cost.toFixed(2)}` : "";
+  const usage = n ? [`${n} call${n === 1 ? "" : "s"}`, cost].filter(Boolean).join(" · ") : "";
   return [chat.model?.name, usage].filter(Boolean).join(" · ") || undefined;
 }
