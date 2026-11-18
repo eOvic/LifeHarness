@@ -3,7 +3,6 @@
 //   npm run desktop:build -- --dir   (unpacked only, fastest; for testing)
 import { execSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { copyEngine } from "./server-deps.mjs";
 
@@ -65,30 +64,6 @@ fs.rmSync("dist-desktop", { recursive: true, force: true });
 run(`npx electron-builder --linux --publish never${extra}`);
 // Check what actually got packaged (the afterPack copy), not just the staging folder.
 run("node scripts/verify-server.mjs dist-desktop/linux-unpacked/resources/server");
-// Privacy gate: nothing that identifies the builder may ship (home path, git email).
-const gitEmail = (() => {
-  try {
-    return execSync("git config user.email", { encoding: "utf8" }).trim();
-  } catch {
-    return "";
-  }
-})();
-const needles = [os.homedir(), gitEmail].filter((n) => n && n.length > 4 && !(process.env.LIFEHARNESS_MAINTAINER ?? "").includes(n));
-const leaks = [];
-const scan = (dir) => {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, e.name);
-    if (e.isDirectory()) scan(p);
-    else if (e.isFile()) {
-      const buf = fs.readFileSync(p);
-      for (const n of needles) if (buf.includes(n)) leaks.push(`${path.relative("dist-desktop/linux-unpacked", p)} contains "${n}"`);
-    }
-  }
-};
-scan("dist-desktop/linux-unpacked/resources");
-if (leaks.length) {
-  console.error(`✗ the package would leak the builder's identity:\n  - ${leaks.slice(0, 20).join("\n  - ")}`);
-  process.exit(1);
-}
-console.log(`✓ privacy: no home path or git email inside the package (${needles.length} identifiers checked)`);
+// Privacy gate: nothing that identifies the builder may ship (home path, user name, git emails).
+run("node scripts/privacy-check.mjs dist-desktop/linux-unpacked/resources");
 console.log("\ndone: dist-desktop/");
