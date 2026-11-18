@@ -214,13 +214,14 @@ async function geocode(city: string, country?: string): Promise<{ lat: number; l
   try {
     const q = encodeURIComponent([city, country].filter(Boolean).join(", "));
     const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`, {
-      headers: { "User-Agent": "LifeHarness/0.1 (local-first planner)" },
+      headers: { "User-Agent": `LifeHarness/${process.env.LIFEHARNESS_VERSION ?? "dev"} (local-first planner)` },
       signal: AbortSignal.timeout(6000),
     });
     if (!res.ok) return null;
     const [hit] = (await res.json()) as { lat: string; lon: string; display_name: string }[];
     if (!hit) return null;
-    return { lat: Math.round(Number(hit.lat) * 1e4) / 1e4, lon: Math.round(Number(hit.lon) * 1e4) / 1e4, label: hit.display_name };
+    // ~1 km is plenty for prayer times, and the profile (with these numbers) goes to the AI provider.
+    return { lat: Math.round(Number(hit.lat) * 100) / 100, lon: Math.round(Number(hit.lon) * 100) / 100, label: hit.display_name };
   } catch {
     return null;
   }

@@ -21,11 +21,26 @@ export function readJson<T>(rel: string, fallback: T): T {
   }
 }
 
+// Life data is private: files 0600, folders 0700 (readable by you only, whatever the umask).
+let privateChecked = false;
+function ensurePrivate() {
+  if (privateChecked) return;
+  privateChecked = true;
+  for (const d of [DATA_DIR, file("chats")]) {
+    try {
+      if ((fs.statSync(/*turbopackIgnore: true*/ d).mode & 0o077) !== 0) fs.chmodSync(/*turbopackIgnore: true*/ d, 0o700);
+    } catch {
+      /* not created yet */
+    }
+  }
+}
+
 export function writeJson(rel: string, value: unknown) {
   const f = file(rel);
-  fs.mkdirSync(/*turbopackIgnore: true*/ path.dirname(f), { recursive: true });
+  fs.mkdirSync(/*turbopackIgnore: true*/ path.dirname(f), { recursive: true, mode: 0o700 });
+  ensurePrivate();
   const tmp = `${f}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(/*turbopackIgnore: true*/ tmp, JSON.stringify(value, null, 1));
+  fs.writeFileSync(/*turbopackIgnore: true*/ tmp, JSON.stringify(value, null, 1), { mode: 0o600 });
   fs.renameSync(/*turbopackIgnore: true*/ tmp, f);
 }
 

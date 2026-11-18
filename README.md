@@ -55,7 +55,16 @@ sudo apt install ./dist-desktop/lifeharness_0.1.0_amd64.deb  # then open "LifeHa
 
 LifeHarness picks a strong, balanced model for the provider you connect (for example Claude Sonnet rather than Opus); you can change it, and the reasoning level, in Settings. Credentials live in the app's own file, `~/.config/LifeHarness/auth.json` (readable only by you). LifeHarness never reads pi's credentials. Provider environment variables (`OPENAI_API_KEY`, …) also work.
 
-**Privacy.** Your life map, plans and tracking are stored only on this computer. During a session, the conversation is sent to the AI provider you connected, and nowhere else.
+![Settings → AI models](docs/assets/ai-models.png)
+
+## Privacy and security
+
+- **Stays on this computer:** your life map, plans, tracking and sessions (plain JSON, readable by your user account only), and your sign-ins and keys (`~/.config/LifeHarness/auth.json`, mode 0600, never sent to the page).
+- **Leaves it:** during a session, the conversation and your life map go to the AI provider you connected, and nowhere else. If you enable prayer times, the city you type is looked up once on OpenStreetMap's Nominatim; coordinates are kept to about 1 km.
+- **No telemetry, no background calls:** LifeHarness has no analytics, turns off the AI engine's background model-catalog refresh (`LIFEHARNESS_MODEL_CATALOG=online` opts back in), and disables Next.js telemetry in its scripts.
+- **A locked-down local server:** it listens on 127.0.0.1 only, answers only loopback host names, refuses cross-site writes, and in the desktop app every request must carry a per-launch secret. A Content-Security-Policy keeps the page from loading or sending anything outside the app.
+- **The desktop app** runs Chromium's sandbox (the `.deb` installs an AppArmor profile), with no Node.js in the page, and denies permissions by default.
+- **Demo data is invented.** README images come from `scripts/seed-demo.ts` via `scripts/readme-shots.ts`; never from a real session.
 
 ## Develop
 
@@ -68,7 +77,8 @@ npm run typecheck
 npm run smoke -- --rounds 30 --keep    # LIVE: a second model plays a persona through interview → plan
 npx tsx scripts/ui-e2e.ts              # drives the real UI in Chrome (server must be running)
 npm run shots                          # screenshots of every page into ./shots
-npm run seed -- /tmp/demo              # deterministic demo data (no model calls) for screenshots and QA
+npm run seed -- /tmp/demo              # deterministic, invented demo data (no model calls) for screenshots and QA
+npx tsx scripts/readme-shots.ts        # regenerate docs/assets from demo data (needs a desktop build)
 npm run qa:desktop -- --data /tmp/demo # drives the packaged app at 3 window sizes: errors, overflow, screenshots
 npx tsx scripts/qa-connections.ts --exe dist-desktop/linux-unpacked/lifeharness   # every connect path, nothing saved
 npm run verify:server -- dist-desktop/linux-unpacked/resources/server             # the AI engine shipped whole

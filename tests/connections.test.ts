@@ -4,7 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it } from "vitest";
+import { mergeProfile } from "@/src/core/profile";
 import { cleanKey } from "@/src/server/connections";
+import { DATA_DIR, writeJson } from "@/src/server/store";
 import { describeModelError, isAuthFailure, providerMessage } from "@/src/server/errors";
 import { recommendedModel } from "@/src/server/llm";
 import { proxy } from "@/proxy";
@@ -79,7 +81,7 @@ describe("proxy (request guard)", () => {
     expect(status(proxy(req("http://127.0.0.1:3210/api/state")))).toBe(200);
     expect(status(proxy(req("http://localhost:3210/today")))).toBe(200);
     expect(status(proxy(req("http://evil.example:3210/api/state")))).toBe(403);
-    expect(status(proxy(req("http://192.0.2.10:3210/api/state")))).toBe(403);
+    expect(status(proxy(req("http://192.0.2.10:3210/api/state")))).toBe(403); // a LAN address (RFC 5737 example)
     process.env.LIFEHARNESS_ALLOW_HOSTS = "box.lan:3210";
     expect(status(proxy(req("http://box.lan:3210/api/state")))).toBe(200);
   });
@@ -97,6 +99,26 @@ describe("proxy (request guard)", () => {
     expect(status(proxy(req("http://127.0.0.1:4000/today", { headers: { "x-lifeharness-secret": "nope" } })))).toBe(403);
     expect(status(proxy(req("http://127.0.0.1:4000/api/state", { headers: { "x-lifeharness-secret": "s3cret" } })))).toBe(200);
     expect(status(proxy(req("http://127.0.0.1:4000/api/health")))).toBe(200);
+  });
+});
+
+describe("privacy", () => {
+  it("adds a CSP that keeps the page on its own server, plus anti-framing headers", () => {
+    const res = proxy(new NextRequest("http://127.0.0.1:3210/today", { headers: { host: "127.0.0.1:3210" } }));
+    const csp = res.headers.get("content-security-policy") ?? "";
+    expect(csp).toContain("connect-src 'self'");
+    expect(csp).toContain("img-src 'self' data: blob:");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(res.headers.get("referrer-policy")).toBe("no-referrer");
+  });
+  it("writes life data readable by the owner only", () => {
+    writeJson("privacy-test.json", { ok: true });
+    expect(fs.statSync(path.join(DATA_DIR, "privacy-test.json")).mode & 0o777).toBe(0o600);
+    expect(fs.statSync(DATA_DIR).mode & 0o077).toBe(0);
+  });
+  it("never stores a precise location (about 1 km is enough for prayer times)", () => {
+    const { profile } = mergeProfile({}, { location: { city: "X", lat: 12.345678, lon: -98.765432 } });
+    expect(profile.location).toMatchObject({ lat: 12.35, lon: -98.77 });
   });
 });
 

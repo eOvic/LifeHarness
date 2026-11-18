@@ -69,6 +69,10 @@ export function mergeProfile(p: Profile, patch: ProfilePatch): { profile: Profil
   for (const k of ["location", "capacity"] as const) {
     if (patch[k] && typeof patch[k] === "object") {
       next[k] = { ...(p[k] ?? {}), ...stripUndefined(patch[k] as object) } as never;
+      // Privacy: ~1 km is plenty for prayer times; never keep (or send the AI) a precise home location.
+      if (k === "location" && next.location) {
+        for (const c of ["lat", "lon"] as const) if (typeof next.location[c] === "number") next.location[c] = Math.round(next.location[c]! * 100) / 100;
+      }
       changes.push(`${k} updated`);
     }
   }

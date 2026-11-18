@@ -12,6 +12,32 @@ const SAFE = new Set(["GET", "HEAD", "OPTIONS"]);
 
 const deny = (why: string) => new NextResponse(why, { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8" } });
 
+// The page may talk to this server only: no remote images or fetches (so nothing the model writes
+// can carry data out, e.g. via an image URL), no framing by other sites (clickjacking), no plugins.
+// Next needs inline scripts/styles; dev mode also needs eval and its hot-reload websocket.
+const dev = process.env.NODE_ENV !== "production";
+const CSP = [
+  "default-src 'self'",
+  `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}`,
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  `connect-src 'self'${dev ? " ws: wss:" : ""}`,
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "object-src 'none'",
+].join("; ");
+const SECURITY_HEADERS: Record<string, string> = {
+  "Content-Security-Policy": CSP,
+  "X-Frame-Options": "DENY",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Cross-Origin-Resource-Policy": "same-origin",
+};
+
 export function proxy(req: NextRequest) {
   const host = (req.headers.get("host") ?? "").toLowerCase();
   const extra = (process.env.LIFEHARNESS_ALLOW_HOSTS ?? "")
@@ -37,7 +63,9 @@ export function proxy(req: NextRequest) {
       if (originHost !== host) return deny("Cross-origin request blocked.");
     }
   }
-  return NextResponse.next();
+  const res = NextResponse.next();
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.headers.set(k, v);
+  return res;
 }
 
 export const config = {

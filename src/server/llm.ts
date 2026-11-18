@@ -29,6 +29,9 @@ export function authFile(): string {
 const g = globalThis as unknown as { __lhRuntime?: Promise<ModelRuntime> };
 
 export function runtime(): Promise<ModelRuntime> {
+  // Privacy: pi refreshes model catalogs from pi.dev in the background (it learns your IP and which
+  // providers you use). The built-in catalog is enough; LIFEHARNESS_MODEL_CATALOG=online opts in.
+  if (process.env.LIFEHARNESS_MODEL_CATALOG !== "online") process.env.PI_OFFLINE ??= "1";
   g.__lhRuntime ??= (async () => {
     const auth = authFile();
     fs.mkdirSync(/*turbopackIgnore: true*/ path.dirname(auth), { recursive: true, mode: 0o700 });

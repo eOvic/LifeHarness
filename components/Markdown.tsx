@@ -6,7 +6,9 @@ import { cx } from "./ui";
 export default function Markdown({ children, className, small = false }: { children: string; className?: string; small?: boolean }) {
   return (
     <div className={cx("prose-lh", small && "prose-sm", className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{children}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ img: ({ alt }) => <span className="text-muted">[image{alt ? `: ${alt}` : ""}]</span> }}>
+        {children}
+      </ReactMarkdown>
     </div>
   );
 }
