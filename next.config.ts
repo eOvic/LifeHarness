@@ -4,8 +4,8 @@ import pkg from "./package.json";
 const nextConfig: NextConfig = {
   // Desktop builds bundle a self-contained server (node .next/standalone/server.js).
   ...(process.env.LIFEHARNESS_STANDALONE ? { output: "standalone" as const } : {}),
-  // Shown in Settings → About (the desktop shell passes the same value at runtime).
-  env: { LIFEHARNESS_VERSION: pkg.version },
+  // Shown in Settings → About (the desktop shell passes the same version at runtime).
+  env: { LIFEHARNESS_VERSION: pkg.version, LIFEHARNESS_SOURCE_URL: pkg.homepage },
   // No <Image> anywhere: images are served as they are, so Next never needs its image library
   // (sharp, which scripts/desktop-build.mjs leaves out of the desktop server).
   images: { unoptimized: true },

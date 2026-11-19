@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createAssistantMessageEventStream,
   fauxAssistantMessage,
@@ -16,6 +16,7 @@ import {
 } from "@earendil-works/pi-ai";
 
 process.env.LIFEHARNESS_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "lh-test-"));
+afterAll(() => fs.rmSync(process.env.LIFEHARNESS_DATA_DIR!, { recursive: true, force: true }));
 
 type Step = (ctx: Context) => AssistantMessage;
 function scripted(steps: Step[]) {

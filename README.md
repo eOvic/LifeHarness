@@ -16,10 +16,12 @@ It runs on your own computer. Your plans and history stay there; only the conver
 
 ### Linux desktop app
 
+Download the latest `.deb` or AppImage from the [Releases page](https://github.com/eOvic/LifeHarness/releases).
+
 **Ubuntu / Debian (recommended):** install the `.deb`, then open **LifeHarness** from your app grid.
 
 ```bash
-sudo apt install ./lifeharness_0.3.0_amd64.deb     # your version number may differ
+sudo apt install ./lifeharness_<version>_amd64.deb     # e.g. lifeharness_0.3.2_amd64.deb
 ```
 
 - **Updating:** quit LifeHarness, then install the newer `.deb` the same way. Your data is kept.
@@ -28,8 +30,8 @@ sudo apt install ./lifeharness_0.3.0_amd64.deb     # your version number may dif
 **Any Linux (no install):** run the AppImage.
 
 ```bash
-chmod +x LifeHarness-0.3.0.AppImage
-./LifeHarness-0.3.0.AppImage --no-sandbox   # Ubuntu 24.04+ needs --no-sandbox for AppImages; the .deb doesn't
+chmod +x LifeHarness-<version>.AppImage
+./LifeHarness-<version>.AppImage --no-sandbox   # Ubuntu 24.04+ needs --no-sandbox for AppImages; the .deb doesn't
 ```
 
 ### Build the installers yourself
@@ -37,12 +39,14 @@ chmod +x LifeHarness-0.3.0.AppImage
 You need [Node.js](https://nodejs.org) 22 or newer.
 
 ```bash
-git clone <repository-url> lifeharness && cd lifeharness
+git clone https://github.com/eOvic/LifeHarness.git && cd LifeHarness
 npm install
 npm run desktop:build      # creates dist-desktop/lifeharness_<version>_amd64.deb and an AppImage
 ```
 
 ### Or run it in your browser (any system)
+
+In the cloned folder (see above):
 
 ```bash
 npm install
@@ -248,6 +252,8 @@ The sidebar hides itself in narrow windows; **Ctrl+B** brings it back, and LifeH
 | The AppImage doesn't start | Run it with `--no-sandbox`, or install the `.deb` instead. |
 | The app seems stuck | It restarts its own engine if it crashes. If not, quit and reopen. Logs are under **File → Open logs folder** (`~/.config/LifeHarness/logs`). |
 | A session stopped halfway | Click **Continue** or **Retry** under the conversation. Nothing you answered is lost. |
+
+**Still stuck, or found a bug?** Open an issue on [GitHub](https://github.com/eOvic/LifeHarness/issues), saying what you did and what you saw. Leave out personal details: your plans and conversations stay on your computer unless you paste them.
 
 ---
 

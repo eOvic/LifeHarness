@@ -1,10 +1,10 @@
 "use client";
-import { Check, FolderOpen } from "lucide-react";
+import { Check, ExternalLink, FolderOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAppearance } from "@/components/appearance";
 import Connections from "@/components/Connections";
 import PageHeader from "@/components/PageHeader";
-import { Button, cx, Label, Spinner } from "@/components/ui";
+import { Button, cx, Label, LinkButton, Spinner } from "@/components/ui";
 import { getJson, postJson } from "@/lib/api";
 import { desktop } from "@/lib/desktop";
 import type { ModelInfo } from "@/src/server/llm";
@@ -239,11 +239,18 @@ export default function SettingsPage() {
                 Free software under the GNU AGPL v3: you may use, study, change and share it, and it comes with no warranty. The software and fonts it includes keep their own
                 licenses.
               </p>
-              {desktop()?.openFolder && (
-                <Button size="sm" variant="ghost" className="mt-2 -ml-2" data-lh="open-licenses" onClick={() => desktop()?.openFolder?.("licenses")}>
-                  <FolderOpen className="h-3.5 w-3.5" /> Licenses
-                </Button>
-              )}
+              <div className="-ml-2 mt-2 flex flex-wrap items-center gap-1">
+                {desktop()?.openFolder && (
+                  <Button size="sm" variant="ghost" data-lh="open-licenses" onClick={() => desktop()?.openFolder?.("licenses")}>
+                    <FolderOpen className="h-3.5 w-3.5" /> Licenses
+                  </Button>
+                )}
+                {SOURCE_URL && (
+                  <LinkButton size="sm" variant="ghost" href={SOURCE_URL} target="_blank" rel="noreferrer" title={SOURCE_URL} data-lh="source-code">
+                    <ExternalLink className="h-3.5 w-3.5" /> Source code
+                  </LinkButton>
+                )}
+              </div>
             </section>
           )}
         </div>
@@ -251,6 +258,9 @@ export default function SettingsPage() {
     </>
   );
 }
+
+/** The public source code (package.json "homepage", via next.config.ts). */
+const SOURCE_URL = process.env.LIFEHARNESS_SOURCE_URL;
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (

@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { AssistantMessage, Context, Message, ToolResultMessage } from "@earendil-works/pi-ai";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 const cc = await import("@/src/server/claude-code");
 const { createToolBridge, IDENTITY_ERROR } = await import("@/src/server/claude-code-bridge");
@@ -188,6 +188,7 @@ async function go(first) {
     delete process.env.FAKE_SCENARIO;
     cc.stopClaudeProcesses(); // no held process carries over between tests
   });
+  afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
   it("streams a tool call only once Claude Code really calls it, then continues the SAME process with the result", async () => {
     process.env.ANTHROPIC_API_KEY = "sk-your-own";

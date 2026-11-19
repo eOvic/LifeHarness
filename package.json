@@ -1,6 +1,6 @@
 {
   "name": "lifeharness",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "license": "AGPL-3.0-only",
   "private": true,
   "description": "An agent harness for self-development: an AI interview turns what you want from life into a week you can actually live.",
@@ -47,5 +47,12 @@
   },
   "main": "electron/main.cjs",
   "author": "LifeHarness",
-  "homepage": "https://lifeharness.invalid"
+  "homepage": "https://github.com/eOvic/LifeHarness",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eOvic/LifeHarness.git"
+  },
+  "bugs": {
+    "url": "https://github.com/eOvic/LifeHarness/issues"
+  }
 }

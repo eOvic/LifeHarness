@@ -1,5 +1,5 @@
 // Small UI primitives shared by every page. Colors come from theme tokens only.
-import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
+import type { AnchorHTMLAttributes, ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 
 export function cx(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(" ");
@@ -29,6 +29,11 @@ export function Button({ variant = "secondary", size = "md", className, ...p }: 
       className={cx("inline-flex shrink-0 select-none items-center justify-center rounded-lg font-medium transition disabled:pointer-events-none disabled:opacity-40", VARIANT[variant], SIZE[size], className)}
     />
   );
+}
+
+/** A link that looks like a Button. In the desktop app, links to other sites open in the browser. */
+export function LinkButton({ variant = "secondary", size = "md", className, ...p }: AnchorHTMLAttributes<HTMLAnchorElement> & { variant?: Variant; size?: Size }) {
+  return <a {...p} className={cx("inline-flex shrink-0 select-none items-center justify-center rounded-lg font-medium transition", VARIANT[variant], SIZE[size], className)} />;
 }
 
 export function IconButton({ className, active, ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) {
