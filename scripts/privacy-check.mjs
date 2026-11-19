@@ -1,5 +1,5 @@
 // Privacy gate: nothing that identifies the person who built it may ship.
-//   node scripts/privacy-check.mjs [dir ...]     (default: dist-desktop/linux-unpacked/resources)
+//   node scripts/privacy-check.mjs [dir ...]     (default: this OS's dist-desktop/<os>-unpacked/resources)
 // Looks for the builder's home path, user name, and every git email configured here (repo + global).
 // Set LIFEHARNESS_MAINTAINER="Name <email>" to publish under an address on purpose (it's then allowed).
 import { execSync } from "node:child_process";
@@ -16,11 +16,15 @@ const git = (args) => {
 };
 const allowed = process.env.LIFEHARNESS_MAINTAINER ?? "";
 const user = os.userInfo().username;
-const needles = [...new Set([os.homedir(), user.length >= 5 ? user : "", git("user.email"), git("--global user.email")])].filter(
+// A Windows home path can appear as C:\Users\x, doubled inside JSON, with forward slashes, or with a
+// lower-case drive letter.
+const pathForms = (p) =>
+  [p, p.replaceAll("\\", "\\\\"), p.replaceAll("\\", "/")].flatMap((f) => (/^[A-Za-z]:/.test(f) ? [f[0].toUpperCase() + f.slice(1), f[0].toLowerCase() + f.slice(1)] : [f]));
+const needles = [...new Set([...pathForms(os.homedir()), user.length >= 5 ? user : "", git("user.email"), git("--global user.email")])].filter(
   (n) => n && n.length > 4 && !allowed.includes(n),
 );
 
-const dirs = process.argv.slice(2).length ? process.argv.slice(2) : ["dist-desktop/linux-unpacked/resources"];
+const dirs = process.argv.slice(2).length ? process.argv.slice(2) : [`dist-desktop/${process.platform === "win32" ? "win" : "linux"}-unpacked/resources`];
 const leaks = [];
 const scan = (dir) => {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

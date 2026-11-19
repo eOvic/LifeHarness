@@ -14,6 +14,17 @@ files:
 # The self-contained Next.js server (.next/standalone, with its traced node_modules) is copied to
 # resources/server by this hook:
 afterPack: scripts/after-pack.cjs
+# Windows: a per-user installer (no administrator needed), built on Windows itself (npm run desktop:build).
+# Unsigned for now, like LearnHarness's: SmartScreen warns until the installer is code-signed.
+win:
+  icon: build/icon.png   # 512 px; electron-builder makes the .ico
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: "${productName}-${version}-${arch}-setup.${ext}"
+nsis:
+  oneClick: true
+  perMachine: false
 linux:
   target: [deb, AppImage]
   category: Office

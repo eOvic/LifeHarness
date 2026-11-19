@@ -24,6 +24,8 @@ const DEV_URL = process.env.LIFEHARNESS_DEV_URL || "";
 const isMac = process.platform === "darwin";
 
 app.setName(PRODUCT);
+// Windows: the same identity as the installer's shortcuts (taskbar grouping, pinning, notifications).
+if (process.platform === "win32") app.setAppUserModelId("dev.lifeharness.desktop");
 if (!app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
@@ -156,8 +158,12 @@ async function startServer() {
       LIFEHARNESS_API_SECRET: apiSecret,
       LIFEHARNESS_VERSION: app.getVersion(),
       LIFEHARNESS_DESKTOP: "1",
+      // Our end of its stdin stays open while this shell lives; when it closes (quit or crash), the
+      // server exits too (instrumentation.ts). No server is ever left running on its own.
+      LIFEHARNESS_EXIT_WITH_STDIN: "1",
     },
-    stdio: ["ignore", out, out],
+    stdio: ["pipe", out, out],
+    windowsHide: true, // no console window on Windows
   });
   fs.closeSync(out);
   const child = server;
@@ -193,6 +199,7 @@ async function restartServer() {
 function stopServer() {
   quitting = true;
   if (server && server.exitCode === null) {
+    server.stdin?.end(); // the server's cue to exit (works the same on every OS)
     server.kill("SIGTERM");
     setTimeout(() => server && server.exitCode === null && server.kill("SIGKILL"), 2000).unref();
   }

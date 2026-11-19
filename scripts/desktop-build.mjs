@@ -1,6 +1,8 @@
-// Build the desktop app: Next standalone server + Electron shell -> .deb + AppImage in dist-desktop/.
-//   npm run desktop:build            (both targets)
-//   npm run desktop:build -- --dir   (unpacked only, fastest; for testing)
+// Build the desktop app: Next standalone server + Electron shell -> installers in dist-desktop/.
+//   npm run desktop:build            on Linux: .deb + AppImage; on Windows: a setup .exe (NSIS)
+//   npm run desktop:build -- --dir   unpacked only, fastest; for testing
+//   npm run desktop:build -- --win   on Linux: a portable Windows .zip for TESTING only (the installer and
+//                                    the .exe's icon and version info need Windows); releases build on Windows
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -9,6 +11,15 @@ import { copyEngine } from "./server-deps.mjs";
 const root = process.cwd();
 const run = (cmd, env = {}) => execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
 const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+// Each OS builds its own installers: Next traces native pieces for the machine it runs on.
+const targetOs = process.argv.includes("--win") ? "win32" : process.platform;
+const TARGET = { linux: { flag: "--linux", unpacked: "linux-unpacked" }, win32: { flag: "--win", unpacked: "win-unpacked" } }[targetOs];
+if (!TARGET) {
+  console.error(`✗ desktop builds run on Linux or Windows (this is ${process.platform})`);
+  process.exit(1);
+}
+const crossWin = targetOs === "win32" && process.platform !== "win32";
+if (crossWin) console.log("⚠ Windows build from Linux: a portable .zip for testing only (installer, icon and version info need Windows)");
 
 const skipNext = process.argv.includes("--skip-next");
 console.log(`1/4 next build (standalone)${skipNext ? ": skipped" : ""}`);
@@ -37,13 +48,53 @@ fs.rmSync(path.join(sa, "data"), { recursive: true, force: true }); // never shi
 for (const dir of ["node_modules/sharp", "node_modules/@img"]) fs.rmSync(path.join(sa, dir), { recursive: true, force: true });
 // Next embeds the build machine's project path (with the user name in it) in its config; the
 // packaged server never needs it (it starts from its own folder). Ship a neutral path instead.
+// On Windows the path shows up with backslashes, doubled inside JSON, or with forward slashes.
+const rootForms = [...new Set([root, root.replaceAll("\\", "\\\\"), root.replaceAll("\\", "/")])].flatMap((f) =>
+  /^[A-Za-z]:/.test(f) ? [f[0].toUpperCase() + f.slice(1), f[0].toLowerCase() + f.slice(1)] : [f],
+);
 for (const f of ["server.js", ".next/required-server-files.json"]) {
   const p = path.join(sa, f);
-  if (fs.existsSync(p)) fs.writeFileSync(p, fs.readFileSync(p, "utf8").split(root).join("/lifeharness"));
+  if (!fs.existsSync(p)) continue;
+  let text = fs.readFileSync(p, "utf8");
+  for (const form of rootForms.sort((a, b) => b.length - a.length)) text = text.split(form).join("/lifeharness");
+  fs.writeFileSync(p, text);
 }
 // The AI engine loads providers and sign-in flows lazily; tracing misses them. Ship it whole.
 const engine = copyEngine(root, sa);
 console.log(`  engine: ${engine.packages} packages (${(engine.bytes / 1e6).toFixed(0)} MB) copied whole`);
+// Turbopack imports the engine through hashed aliases: .next/node_modules/<package>-<hash>, symlinks to
+// node_modules/<package>. Symlinks don't survive a Windows installer, so point the compiled code at the
+// real packages (found in the server's node_modules) and drop the aliases, on every OS.
+const aliasDir = path.join(sa, ".next", "node_modules");
+if (fs.existsSync(aliasDir)) {
+  const version = (dir) => JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")).version;
+  const aliases = [];
+  for (const e of fs.readdirSync(aliasDir)) {
+    for (const alias of e.startsWith("@") ? fs.readdirSync(path.join(aliasDir, e)).map((n) => `${e}/${n}`) : [e]) {
+      const real = /^(.+)-[0-9a-f]{16}$/.exec(alias)?.[1];
+      const realDir = real && path.join(sa, "node_modules", real);
+      if (!realDir || !fs.existsSync(path.join(realDir, "package.json")) || version(path.join(aliasDir, alias)) !== version(realDir)) {
+        console.error(`✗ unexpected engine alias .next/node_modules/${alias}: not a copy of a shipped package`);
+        process.exit(1);
+      }
+      aliases.push([alias, real]);
+    }
+  }
+  const rewrite = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) rewrite(p);
+      else if (/\.(c?js|mjs|json)$/.test(e.name)) {
+        const before = fs.readFileSync(p, "utf8");
+        const after = aliases.reduce((s, [alias, real]) => s.split(alias).join(real), before);
+        if (after !== before) fs.writeFileSync(p, after);
+      }
+    }
+  };
+  rewrite(path.join(sa, ".next", "server"));
+  fs.rmSync(aliasDir, { recursive: true, force: true });
+  console.log(`  engine imports: ${aliases.map(([, real]) => real).join(", ")} (direct, no symlinks)`);
+}
 run(`node scripts/verify-server.mjs ${sa}`);
 
 console.log("3/4 stage the Electron app");
@@ -66,7 +117,7 @@ fs.writeFileSync(
       desktopName: "lifeharness.desktop", // WM_CLASS: lets the dock match the window to its launcher
       homepage: pkg.homepage,
       author: { name: maintainer[1], email: maintainer[2] },
-      license: "UNLICENSED",
+      license: pkg.license,
     },
     null,
     2,
@@ -76,11 +127,18 @@ fs.writeFileSync(
 console.log("4/4 electron-builder");
 const extra = process.argv.includes("--dir") ? " --dir" : "";
 fs.rmSync("dist-desktop", { recursive: true, force: true });
-run(`npx electron-builder --linux --publish never${extra}`);
+// From Linux, the Windows installer (NSIS) and the .exe's icon and version info need Wine: a test build
+// skips them and zips the app instead.
+const testZip = " zip -c.win.signAndEditExecutable=false -c.win.artifactName='${productName}-${version}-${arch}-test.${ext}'";
+run(`npx electron-builder ${TARGET.flag}${crossWin && !extra ? testZip : crossWin ? " -c.win.signAndEditExecutable=false" : ""} --publish never${extra}`);
+const res = path.join("dist-desktop", TARGET.unpacked, "resources");
 // Check what actually got packaged (the afterPack copy), not just the staging folder.
-run("node scripts/verify-server.mjs dist-desktop/linux-unpacked/resources/server");
+run(`node scripts/verify-server.mjs ${path.join(res, "server")}`);
 // Licenses: our LICENSE and the third-party notices ship (scripts/after-pack.cjs); sharp stays out.
-const res = "dist-desktop/linux-unpacked/resources";
+if (fs.existsSync(path.join(res, "server", ".next", "node_modules"))) {
+  console.error("✗ engine aliases (.next/node_modules) were shipped: they're symlinks, which break on Windows");
+  process.exit(1);
+}
 const problems = [
   ...["licenses/LICENSE", "licenses/THIRD_PARTY_NOTICES.txt"].filter((f) => !fs.existsSync(path.join(res, f))).map((f) => `${f} is missing`),
   ...["sharp", "@img"].filter((n) => fs.existsSync(path.join(res, "server/node_modules", n))).map((n) => `${n} was shipped`),
@@ -91,5 +149,5 @@ if (problems.length) {
 }
 console.log("✓ licenses: LICENSE and third-party notices shipped; sharp left out");
 // Privacy gate: nothing that identifies the builder may ship (home path, user name, git emails).
-run("node scripts/privacy-check.mjs dist-desktop/linux-unpacked/resources");
+run(`node scripts/privacy-check.mjs ${res}`);
 console.log("\ndone: dist-desktop/");
