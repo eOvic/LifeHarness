@@ -35,6 +35,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   - **Environment:** no `VAR=1 cmd` in npm scripts. Use `scripts/next.mjs` or set it in code.
   - **Paths:** build them with `path.join`, and check Windows path forms in privacy checks (backslashes, doubled in JSON).
   - **Release builds:** build installers on the OS they're for.
+  - **Checking the OS:** never test `process.platform` in bundled code. Turbopack decides such conditions at build time and drops the other branch, so a Linux build behaved like Linux on Windows. Ask `src/server/platform.ts` instead (`LIFEHARNESS_PLATFORM` lets tests act as Windows). `tests/platform.test.ts` and the desktop build both enforce it.
 - **License: AGPL-3.0-only** (like LearnHarness).
   - **Borrowed code:** only from compatible licenses, with a header saying where it came from (as in `claude-code.ts`). Never copy code from incompatible sources.
   - **Notices:** the desktop build ships `LICENSE` and generated third-party notices in `resources/licenses/` (`scripts/third-party-notices.mjs`). A new font needs its license in `licenses/fonts/`.

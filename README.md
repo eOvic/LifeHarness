@@ -252,7 +252,7 @@ The sidebar hides itself in narrow windows; **Ctrl+B** brings it back, and LifeH
 |---|---|
 | "No AI model is connected" | Connect one in **Settings → AI models** (see [above](#first-run-connect-an-ai-model)). Your session waits and continues once you do. |
 | "Claude Code isn't signed in" | In a terminal, run `claude auth login`, then click **Retry**. |
-| "Claude Code isn't installed", or Claude won't connect | Install it ([guide](https://code.claude.com/docs/en/setup)) and check that `claude --version` works in a terminal (on Windows, PowerShell), then **Check again**. LifeHarness looks in your PATH and in usual places like `~/.local/bin`. On Windows it needs `claude.exe` from Anthropic's installer or WinGet. |
+| "Claude Code isn't installed", or Claude won't connect | Install it ([guide](https://code.claude.com/docs/en/setup)) and check that `claude --version` works in a terminal (on Windows, PowerShell), then **Check again**. LifeHarness looks in your PATH and in usual places like `~/.local/bin`. On Windows it finds Anthropic's installer, WinGet, Scoop, Bun and npm installs. |
 | "…usage limit is reached" | Your plan's or account's limit for now. The message says when it resets; you can also switch model in Settings. |
 | "…rejected that key" | Copy the whole key again, with no spaces. Check that your provider account has billing or credit set up. |
 | ChatGPT sign-in says its port is in use | Another sign-in (for example the Codex CLI) is using it: close that, then try again. |
