@@ -58,6 +58,8 @@ export interface ClaudeCodeStatus {
   state: "not-found" | "ok" | "update-required" | "unchecked";
   version: string | null;
   minimumVersion: string;
+  /** The setup steps differ on Windows (PowerShell install command). */
+  windows?: boolean;
 }
 
 export function findClaude(): string | undefined {

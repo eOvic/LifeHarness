@@ -12,7 +12,8 @@ const arg = (name: string, dflt: string) => {
   const i = process.argv.indexOf(name);
   return i > 0 ? process.argv[i + 1] : dflt;
 };
-const exe = arg("--exe", "/opt/LifeHarness/lifeharness");
+// Default: the installed app (Linux: the .deb; Windows: the per-user installer's folder).
+const exe = arg("--exe", process.platform === "win32" ? path.join(process.env.LOCALAPPDATA ?? "", "Programs", "LifeHarness", "LifeHarness.exe") : "/opt/LifeHarness/lifeharness");
 const data = arg("--data", "");
 const out = arg("--out", "shots/qa");
 const sizes = arg("--sizes", "1440x900,960x1048,760x560").split(",").map((s) => s.split("x").map(Number) as [number, number]);
@@ -23,7 +24,7 @@ fs.mkdirSync(out, { recursive: true });
 const config = fs.mkdtempSync(path.join(os.tmpdir(), "lh-qa-config-"));
 const app = await electron.launch({
   executablePath: exe,
-  args: ["--no-sandbox"],
+  args: process.platform === "linux" ? ["--no-sandbox"] : [], // Linux: unprivileged sandbox is blocked outside the .deb
   env: { ...process.env, LIFEHARNESS_DATA_DIR: data, XDG_CONFIG_HOME: config } as Record<string, string>,
   timeout: 60000,
 });

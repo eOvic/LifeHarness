@@ -34,7 +34,7 @@ if (arg("--exe")) {
   authFile = path.join(config, "LifeHarness", "auth.json");
   const app = await electron.launch({
     executablePath: arg("--exe")!,
-    args: ["--no-sandbox"],
+    args: process.platform === "linux" ? ["--no-sandbox"] : [],
     env: { ...process.env, LIFEHARNESS_DATA_DIR: data, XDG_CONFIG_HOME: config } as Record<string, string>,
   });
   page = await app.firstWindow();

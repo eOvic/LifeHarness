@@ -360,7 +360,8 @@ function ClaudeCodeRow({ p, refresh, onConnected, onDisconnected }: { p: Provide
           >
             {st.state === "not-found" && (
               <>
-                <Cmd text={INSTALL_CMD} />
+                {st.windows && <p className="text-[12.5px] text-muted">In PowerShell:</p>}
+                <Cmd text={st.windows ? INSTALL_CMD_WINDOWS : INSTALL_CMD} />
                 <a href="https://code.claude.com/docs/en/setup" target="_blank" rel="noopener noreferrer" className="lh-mono inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.06em] text-muted hover:text-ink">
                   Other ways to install <ExternalLink className="h-3 w-3" />
                 </a>
@@ -369,7 +370,7 @@ function ClaudeCodeRow({ p, refresh, onConnected, onDisconnected }: { p: Provide
             {st.state === "update-required" && <Cmd text="claude update" />}
             {st.state === "unchecked" && <Cmd text="claude --version" />}
           </Step>
-          <Step n={2} done={false} title="Sign in to Claude Code with your Claude plan, if you haven't (in a terminal)">
+          <Step n={2} done={false} title={`Sign in to Claude Code with your Claude plan, if you haven't (in ${st.windows ? "PowerShell or Command Prompt" : "a terminal"})`}>
             <Cmd text="claude auth login" />
             <p className="text-[12.5px] text-muted">LifeHarness doesn&apos;t check this: it never reads your Claude account. If a session says Claude Code isn&apos;t signed in, run it.</p>
           </Step>
@@ -393,6 +394,7 @@ function ClaudeCodeRow({ p, refresh, onConnected, onDisconnected }: { p: Provide
 
 // Anthropic's native installer (code.claude.com/docs/en/setup), for macOS, Linux and WSL.
 const INSTALL_CMD = ["curl -fsSL https://claude.ai/install.sh", "bash"].join(" | ");
+const INSTALL_CMD_WINDOWS = ["irm https://claude.ai/install.ps1", "iex"].join(" | ");
 
 function Step({ n, done, title, children }: { n: number; done: boolean; title: string; children?: React.ReactNode }) {
   return (

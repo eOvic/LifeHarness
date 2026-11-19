@@ -123,7 +123,8 @@ describe("the tool bridge", () => {
   });
 });
 
-describe("full runs through a fake claude", () => {
+// The fake claude is a script with a #! line; Windows only runs claude.exe (no shell), so these run on Linux/macOS.
+describe.skipIf(process.platform === "win32")("full runs through a fake claude", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lh-fake-claude-"));
   const fake = path.join(dir, "claude");
   const seen = () => fs.readdirSync(dir).filter((f) => f.startsWith("seen-")).length;

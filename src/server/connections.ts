@@ -58,7 +58,7 @@ export interface ProviderInfo {
 async function claudeCodeEntry(force = false): Promise<ProviderInfo> {
   const st = await claudeCodeStatus(force);
   const enabled = !!getSettings().claudeCode;
-  const status: ClaudeCodeStatus = { state: st.state, version: st.version, minimumVersion: st.minimumVersion }; // no cache metadata
+  const status: ClaudeCodeStatus = { state: st.state, version: st.version, minimumVersion: st.minimumVersion, windows: process.platform === "win32" }; // no cache metadata
   const ready = st.state === "ok";
   return {
     id: CLAUDE_CODE,

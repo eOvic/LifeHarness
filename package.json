@@ -6,9 +6,9 @@
   "description": "An agent harness for self-development: an AI interview turns what you want from life into a week you can actually live.",
   "type": "module",
   "scripts": {
-    "dev": "NEXT_TELEMETRY_DISABLED=1 next dev -H 127.0.0.1 -p 3210",
-    "build": "NEXT_TELEMETRY_DISABLED=1 next build",
-    "start": "NEXT_TELEMETRY_DISABLED=1 next start -H 127.0.0.1 -p 3210",
+    "dev": "node scripts/next.mjs dev -H 127.0.0.1 -p 3210",
+    "build": "node scripts/next.mjs build",
+    "start": "node scripts/next.mjs start -H 127.0.0.1 -p 3210",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "smoke": "tsx scripts/smoke-agent.ts",
