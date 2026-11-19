@@ -49,9 +49,10 @@ sudo apt install ./dist-desktop/lifeharness_0.1.0_amd64.deb  # then open "LifeHa
 
 **Models.** Connect one AI provider in **Settings → AI models** (the Start page asks on first run):
 
-- **Sign in with a subscription:** ChatGPT (Plus, Pro, Team), GitHub Copilot (free for verified students and teachers) or Grok (SuperGrok, X Premium). More sign-ins are under "More": OpenRouter, ChatGPT via Codex, Kimi, Meta, Radius.
+- **Claude with your Pro, Max or Ultra plan, through Claude Code:** install [Claude Code](https://code.claude.com/docs/en/setup) and sign in there with Anthropic's own sign-in (`claude auth login`), then click Connect. LifeHarness runs Claude Code for your sessions; it never sees your Claude password, tokens or account, and Claude Code decides how each request is billed.
+- **Sign in with another subscription:** ChatGPT (Plus, Pro, Team), GitHub Copilot (free for verified students and teachers) or Grok (SuperGrok, X Premium). More sign-ins are under "More": OpenRouter, ChatGPT via Codex, Kimi, Meta, Radius.
 - **Or paste an API key:** Anthropic, OpenAI, Google Gemini (has a free tier), OpenRouter, and about 35 more. Each key is checked with one tiny request before it's saved, so a typo is caught on the spot.
-- **Claude is offered through an API key only.** Anthropic doesn't allow third-party apps to use Claude Pro/Max sign-in ([their policy](https://code.claude.com/docs/en/legal-and-compliance)).
+- **Why Claude goes through Claude Code:** Anthropic doesn't allow third-party apps to offer Claude sign-in or handle Claude plan credentials, but allows running the unmodified Claude Code that you signed into yourself ([their policy](https://code.claude.com/docs/en/legal-and-compliance)). An Anthropic API key works too.
 
 LifeHarness picks a strong, balanced model for the provider you connect (for example Claude Sonnet rather than Opus); you can change it, and the reasoning level, in Settings. Credentials live in the app's own file, `~/.config/LifeHarness/auth.json` (readable only by you). LifeHarness never reads pi's credentials. Provider environment variables (`OPENAI_API_KEY`, …) also work.
 

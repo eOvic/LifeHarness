@@ -39,6 +39,7 @@ Done:
 - **AI models in the app** (after the first install couldn't reach any model): Settings → AI models with subscription sign-in (ChatGPT, GitHub Copilot, Grok, more) and API keys for ~40 providers, each key tested before it's saved; the app's own credential file; a "connect a model" step on first run and in any session that can't run; plain-language model errors.
 - The AI engine ships whole and is verified at build time (lazy imports had been dropped by tracing).
 - Hardening: loopback-only, same-origin writes, a per-launch desktop secret; dev servers bound to 127.0.0.1.
+- **Claude with your plan, through Claude Code** (0.3.0), modelled on LearnHarness's external-CLI provider: version-only detection, Claude Code's own sign-in and billing, tools admitted only through a token-protected MCP bridge, processes held across turns (even while you think about an answer) with replay as the fallback.
 - Desktop polish: right-click menu, server crash recovery, log rotation, "Open folder" buttons, About/version; layouts checked at 1440, 960 (half screen) and 760 px.
 
 Next:

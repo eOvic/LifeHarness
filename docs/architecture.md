@@ -146,10 +146,25 @@ LifeHarness owns its credentials. `src/server/llm.ts` creates pi's `ModelRuntime
 **Connecting** (`src/server/connections.ts`, Settings → AI models) goes through pi's own `login(provider, "oauth" | "api_key", interaction)`:
 - A sign-in is a *login job*. pi drives the flow; its prompts ("paste the redirect URL", "enterprise domain?") and events (open this URL, enter this device code) stream to the page as NDJSON from `POST /api/connections/login`, and answers come back on `POST /api/connections/login/<job>`. Closing the stream cancels the job (freeing callback ports such as 1455).
 - An API key is cleaned (no whitespace; keys starting with `!` are refused, because pi runs those as shell commands), then tested with one tiny request while held in memory only (`setRuntimeApiKey`). A key the provider rejects is never saved.
-- Claude Pro/Max sign-in is not offered: Anthropic doesn't allow third-party apps to use it. Claude is available with an API key.
+- Claude Pro/Max sign-in is not offered directly (Anthropic doesn't allow third-party apps to use it); Claude plans work through Claude Code instead (below), and Claude API keys work as usual.
 - After a connect, the app adopts the provider's recommended model unless a working model was already picked. Recommendations favour each provider's strong, balanced model (`PREFERENCES` in `llm.ts`; e.g. the newest Sonnet, not Opus).
 
 **Errors** a person can act on: `errors.ts` maps provider failures (rejected key, quota, network, overload, missing engine files) to one sentence and an action (`connect` or `retry`). Sessions keep the raw text as detail. A turn that can't start because nothing is connected returns 503 with `action: "connect"`, and the session shows the connect panel, then re-sends the same input once a model is connected.
+
+## Claude through Claude Code
+
+Claude plans can't be connected directly (Anthropic forbids third-party Claude sign-in and handling plan credentials), but Anthropic allows running the **unmodified Claude Code** that the person signed into themselves. `src/server/claude-code.ts` makes it a model provider, following the design of LearnHarness's external-CLI provider (reimplemented here):
+
+- **Opt-in, version-only status.** Settings → AI models → Claude → Connect turns it on. LifeHarness checks only `claude --version` (minimum 2.1.259): no auth-status command, no account details, no credential files, no model call. Install, sign-in and billing stay Claude Code's (`claude auth login`).
+- **One isolated process per conversation, without a shell**, in an empty temporary folder:
+  - flags: `--system-prompt-file` (our prompt), `--tools ""`, `--disable-slash-commands`, `--no-session-persistence`, `--permission-prompts none`, `--strict-mcp-config`;
+  - your *user* settings still load (`--setting-sources user`), so sign-in and routing work as you configured them, while `--settings` turns off hooks and pins the default output style, and `CLAUDE_CODE_DISABLE_CLAUDE_MDS=1` keeps CLAUDE.md memory out;
+  - the environment is yours minus what LifeHarness itself set (its request secret).
+- **Tools through an authenticated bridge** (`claude-code-bridge.ts`): a private MCP server (Streamable HTTP) on 127.0.0.1 per process, bearer-token protected, its tools pre-approved with `--allowedTools`. A streamed tool call is only an *intent*; it runs when the matching MCP call arrives (same `claudecode/toolUseId`, name and arguments). Anything else (a refusal, a mismatch, moving on early) fails closed. Nothing runs from stdout alone.
+- **Held calls, live processes.** The bridge holds each call until LifeHarness has the result (even the person's answer to a question), and the process stays alive, so the conversation continues natively with real tool results. Reuse requires the same conversation (chat id), instructions, tools, model, effort and environment, and the exact history so far. The system prompt's live context (clock, life map, open strands; after `LIVE_CONTEXT_MARKER`) may change: the update travels with the next tool result. After 10 idle minutes, a restart or any other change, the next call starts a fresh process that replays the history as labelled text.
+- **Billing** shows as "via Claude Code"; its client-side dollar estimates aren't imported.
+- **Privacy.** The prompt (with the life map) and the bridge config (with its token) are written 0600 to private temp folders, removed with the process. Claude Code keeps no session file of these conversations.
+- **Tests** drive a fake `claude` that streams tool calls and calls them back over the bridge like the real CLI (`tests/claude-code.test.ts`), including the real agent loop across saved turns. `LIFEHARNESS_DEBUG_CLAUDE=1` logs why a held process was or wasn't reused; `LIFEHARNESS_CLAUDE_BIN` points at another binary.
 
 ## Local server security
 

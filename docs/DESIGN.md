@@ -64,7 +64,7 @@ Categories are mid-saturation hues (`CATEGORIES` in `src/core/types.ts`) drawn a
 
 Modelled on LearnHarness's Providers panel: quiet rows, mono labels, one small action per row.
 
-- **Subscriptions** first ("sign in with a plan you already pay for"): ChatGPT, GitHub Copilot, Grok, then "More sign-ins". **API keys** second: four featured providers, then "Add another provider".
+- **Subscriptions** first ("sign in with a plan you already pay for"): Claude (through Claude Code), ChatGPT, GitHub Copilot, Grok, then "More sign-ins". Claude's Connect either connects at once or opens a numbered setup panel (install, sign in, Check again) with copyable commands. **API keys** second: four featured providers, then "Add another provider".
 - **One action per row.** A row reads `Name  blurb ………… [Connect]`. A key row expands in place to `[Paste key…] Save · Cancel · Get a key ↗`; nothing navigates away.
 - **Flows stay inline.** A sign-in shows its live state under its row: the sign-in page button (opened automatically in the desktop app), a large device code with Copy and Open, or a paste field when the browser can't come back. It ends in one green sentence ("Connected. LifeHarness will use Claude Sonnet 5.5.") or one red one (the provider's own words, trimmed of JSON).
 - **Connected** rows show `✓ CONNECTED · KEY` / `· SUBSCRIPTION` and a ghost Disconnect. Secrets never come back to the page.
