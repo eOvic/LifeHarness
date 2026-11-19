@@ -3,15 +3,17 @@
  * LifeHarness desktop shell.
  *
  * Packaged: spawns the Next.js standalone server (resources/server/server.js) with Electron's own
- * Node (ELECTRON_RUN_AS_NODE) on a free 127.0.0.1 port, data in ~/.config/LifeHarness/data, then
- * opens a frameless window on it. Dev: LIFEHARNESS_DEV_URL points at a running `next dev`.
+ * Node (ELECTRON_RUN_AS_NODE) on a free 127.0.0.1 port, data in <userData>/data (~/.config/LifeHarness
+ * on Linux, %APPDATA%\LifeHarness on Windows), then opens a frameless window on it.
+ * Dev: LIFEHARNESS_DEV_URL points at a running `next dev`.
  *
  * Window chrome: no OS title bar. The app's 60px header bands are the title bar (CSS
  * -webkit-app-region: drag); on Linux/Windows the native min/max/close buttons are drawn over
  * the top-right corner (titleBarOverlay) in the theme's colors, and the page leaves room for
  * them with env(titlebar-area-*).
  */
-const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell, session } = require("electron");
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell, session } = require("electron");
+const { fitToScreen } = require("./window-state.cjs");
 const { randomBytes } = require("node:crypto");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
@@ -253,12 +255,13 @@ let win = null;
 
 function createWindow(url) {
   const state = loadState();
+  const bounds = fitToScreen(state, screen); // never off-screen after a monitor or scaling change
   const chrome = chromeColors();
   win = new BrowserWindow({
-    x: state.x,
-    y: state.y,
-    width: state.width || 1440,
-    height: state.height || 900,
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
     minWidth: 760,
     minHeight: 560,
     title: PRODUCT,

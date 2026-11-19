@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import type { Message } from "@earendil-works/pi-ai";
 import { systemTimezone } from "../core/time";
 import type { BlockSpec, Goal, Plan, Profile, Tracking, WeekSchedule } from "../core/types";
+import { isWindows } from "./platform";
 
 export const DATA_DIR = process.env.LIFEHARNESS_DATA_DIR || path.join(process.cwd(), "data");
 
@@ -41,7 +42,32 @@ export function writeJson(rel: string, value: unknown) {
   ensurePrivate();
   const tmp = `${f}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(/*turbopackIgnore: true*/ tmp, JSON.stringify(value, null, 1), { mode: 0o600 });
-  fs.renameSync(/*turbopackIgnore: true*/ tmp, f);
+  replaceFile(tmp, f);
+}
+
+/** Atomically replace `target` with `tmp`. Found on a Windows PC: there a rename over a file fails
+ *  (EPERM, EACCES, EBUSY) while another program briefly holds it (antivirus, the search indexer, a sync
+ *  tool, an editor), which made saving fail and left a .tmp file. Retry for about 2 s; on failure,
+ *  remove the temporary file. Never fall back to a non-atomic copy: a crash midway could truncate
+ *  profile.json, and losing the life map is worse than one save the person can retry. */
+export function replaceFile(tmp: string, target: string, rename: (from: string, to: string) => void = fs.renameSync): void {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      rename(tmp, target);
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code ?? "";
+      if (!isWindows() || attempt >= 24 || !["EPERM", "EACCES", "EBUSY"].includes(code)) {
+        try {
+          fs.rmSync(/*turbopackIgnore: true*/ tmp, { force: true });
+        } catch {
+          /* best effort */
+        }
+        throw err;
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.min(10 * (attempt + 1), 100)); // 10, 20 … 100 ms: about 2 s in all
+    }
+  }
 }
 
 // ---- settings ---------------------------------------------------------------------------
