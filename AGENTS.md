@@ -29,6 +29,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - **Credentials.** The app uses its own `~/.config/LifeHarness/auth.json` (Settings → AI models), never pi's. Tests and QA must use scratch credentials: `LIFEHARNESS_AUTH_FILE=$(mktemp -d)/auth.json`, or `XDG_CONFIG_HOME=$(mktemp -d)` for the packaged app. Don't offer or use Claude Pro/Max sign-in directly (Anthropic's terms): Claude plans go through the person's own Claude Code.
 - **QA without spending money.** `npm run seed -- <dir>` writes demo data with no model calls. `scripts/qa-connections.ts` exercises every connect path (a deliberately invalid key, sign-in start, device code), saving nothing. `npm run qa:desktop` drives the packaged app at 3 window sizes.
 - **Packaging guard.** `desktop:build` copies the AI engine whole and runs `scripts/verify-server.mjs` twice. If it fails, a lazily loaded module is missing: don't ship.
+- **Windows works too.** Keep it that way:
+  - **Child processes:** spawn without a shell, without `npx`, and with `windowsHide: true`. Only `claude.exe` counts on Windows.
+  - **Stopping processes:** kill a tree with `taskkill /T` on Windows, a process group elsewhere.
+  - **Environment:** no `VAR=1 cmd` in npm scripts. Use `scripts/next.mjs` or set it in code.
+  - **Paths:** build them with `path.join`, and check Windows path forms in privacy checks (backslashes, doubled in JSON).
+  - **Release builds:** build installers on the OS they're for.
 - **License: AGPL-3.0-only** (like LearnHarness).
   - **Borrowed code:** only from compatible licenses, with a header saying where it came from (as in `claude-code.ts`). Never copy code from incompatible sources.
   - **Notices:** the desktop build ships `LICENSE` and generated third-party notices in `resources/licenses/` (`scripts/third-party-notices.mjs`). A new font needs its license in `licenses/fonts/`.

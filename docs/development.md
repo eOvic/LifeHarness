@@ -40,15 +40,22 @@ LIFEHARNESS_DATA_DIR=$(mktemp -d) LIFEHARNESS_AUTH_FILE=$(mktemp -d)/auth.json n
 ## Build the desktop app
 
 ```bash
-npm run desktop:build            # .deb + AppImage in dist-desktop/
-npm run desktop:build -- --dir   # unpacked only (faster)
+npm run desktop:build            # Linux: .deb + AppImage; Windows: LifeHarness-<v>-x64-setup.exe (in dist-desktop/)
+npm run desktop:build -- --dir   # unpacked only (faster): dist-desktop/linux-unpacked or win-unpacked
+npm run desktop:build -- --win   # on Linux: a Windows build for testing only (no .exe icon or version info)
 ```
+
+**Build each OS on that OS.** Next traces native pieces for the machine it builds on, and the Windows `.exe` gets its icon and version info only when built on Windows. The Windows installer is per-user (NSIS, no administrator) and unsigned, so SmartScreen warns until it's code-signed.
+
+**On Windows** you need Node.js 22+ and Git, then the same commands work in PowerShell: `npm install`, `npm test`, `npm run dev`, `npm run desktop`, `npm run desktop:build`. The packaged app is then in `dist-desktop\win-unpacked\LifeHarness.exe`, and a per-user install in `%LOCALAPPDATA%\Programs\LifeHarness`. To check an install, run `npx tsx scripts/qa-desktop.ts --data <copy of demo data>`. The tests that use a fake Claude Code are skipped there, because Windows only runs `claude.exe`.
 
 The build refuses to ship a broken or leaky package:
 - **The AI engine is shipped whole and checked twice.** `scripts/verify-server.mjs` confirms every module can load from the packaged folder.
 - **The server folder may contain only runtime files.** A file-system call the bundler can't resolve once pulled the whole project in.
 - **Nothing may identify you.** `scripts/privacy-check.mjs` fails the build if your home path, user name or git email appears anywhere in the package.
 - **The package names a neutral maintainer.** Set `LIFEHARNESS_MAINTAINER="Name <email>"` to publish under your own.
+- **No symlinks.** Turbopack imports the AI engine through hashed aliases (`.next/node_modules/<package>-<hash>`, which are symlinks). Symlinks don't survive a Windows installer, so the build points the compiled code at the real packages and removes the aliases.
+- **The server dies with the app.** It exits when the desktop shell's end of its stdin closes, even after a crash (`instrumentation.ts`). No orphaned server can block an update on Windows.
 - **Licenses must ship.** `scripts/after-pack.cjs` puts `LICENSE` and `THIRD_PARTY_NOTICES.txt` in `resources/licenses/`. `scripts/third-party-notices.mjs` writes the notices file. It covers every package in the server and every production dependency the bundles can contain, plus the fonts in `licenses/fonts/`. The build fails if either file is missing.
 - **sharp stays out.** Next's image library (sharp and libvips: 47 MB, LGPL) is removed from the server, and `images.unoptimized` keeps Next from loading it. If you add `next/image`, revisit both.
 

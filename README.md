@@ -34,17 +34,25 @@ chmod +x LifeHarness-<version>.AppImage
 ./LifeHarness-<version>.AppImage --no-sandbox   # Ubuntu 24.04+ needs --no-sandbox for AppImages; the .deb doesn't
 ```
 
+### Windows desktop app
+
+Download `LifeHarness-<version>-x64-setup.exe` from the [Releases page](https://github.com/eOvic/LifeHarness/releases) and run it. It installs for your account only (no administrator needed) and adds LifeHarness to the Start menu.
+
+- **"Windows protected your PC":** the installer isn't code-signed yet, so SmartScreen warns about it. Click **More info → Run anyway**.
+- **Updating:** run the newer installer. Your data is kept.
+- **Removing:** **Settings → Apps → Installed apps → LifeHarness → Uninstall**. Your data stays in `%APPDATA%\LifeHarness` until you delete it.
+
 ### Build the installers yourself
 
-You need [Node.js](https://nodejs.org) 22 or newer.
+You need [Node.js](https://nodejs.org) 22 or newer and [Git](https://git-scm.com). Build on the system you're building for: Linux makes the `.deb` and AppImage, Windows makes the setup `.exe`.
 
 ```bash
 git clone https://github.com/eOvic/LifeHarness.git && cd LifeHarness
 npm install
-npm run desktop:build      # creates dist-desktop/lifeharness_<version>_amd64.deb and an AppImage
+npm run desktop:build      # installers in dist-desktop/
 ```
 
-### Or run it in your browser (any system)
+### Or run it in your browser (Linux, Windows, macOS)
 
 In the cloned folder (see above):
 
@@ -53,7 +61,7 @@ npm install
 npm run dev                # then open http://127.0.0.1:3210
 ```
 
-In browser mode your data goes to the `data/` folder of the project. Desktop builds are Linux-only for now, so macOS and Windows users run it this way.
+In browser mode your data goes to the `data/` folder of the project. There's no macOS desktop build yet, so macOS users run it this way.
 
 ---
 
@@ -222,8 +230,8 @@ The sidebar hides itself in narrow windows; **Ctrl+B** brings it back, and LifeH
 ## Your data and privacy
 
 **What stays on your computer:**
-- **Your life map, plans, tracking and conversations:** plain files readable only by your user account. In the desktop app they're in `~/.config/LifeHarness/data` (**File → Open data folder**); in browser mode, in the project's `data/` folder.
-- **Your sign-ins and API keys:** in `~/.config/LifeHarness/auth.json`, readable only by you, and never shown in the app. Disconnecting a provider removes its key.
+- **Your life map, plans, tracking and conversations:** plain files readable only by your user account. In the desktop app they're in `~/.config/LifeHarness/data` on Linux and `%APPDATA%\LifeHarness\data` on Windows (**File → Open data folder**); in browser mode, in the project's `data/` folder.
+- **Your sign-ins and API keys:** in `auth.json` in the same `LifeHarness` folder, readable only by you, and never shown in the app. Disconnecting a provider removes its key.
 
 **What leaves it:**
 - **During a conversation:** what you write, and your life map, go to the AI provider you connected, and nowhere else.
@@ -244,13 +252,14 @@ The sidebar hides itself in narrow windows; **Ctrl+B** brings it back, and LifeH
 |---|---|
 | "No AI model is connected" | Connect one in **Settings → AI models** (see [above](#first-run-connect-an-ai-model)). Your session waits and continues once you do. |
 | "Claude Code isn't signed in" | In a terminal, run `claude auth login`, then click **Retry**. |
-| "Claude Code isn't installed", or Claude won't connect | Install it ([guide](https://code.claude.com/docs/en/setup)) and check that `claude --version` works in a terminal, then **Check again**. LifeHarness looks in your PATH and in usual places like `~/.local/bin`. |
+| "Claude Code isn't installed", or Claude won't connect | Install it ([guide](https://code.claude.com/docs/en/setup)) and check that `claude --version` works in a terminal (on Windows, PowerShell), then **Check again**. LifeHarness looks in your PATH and in usual places like `~/.local/bin`. On Windows it needs `claude.exe` from Anthropic's installer or WinGet. |
 | "…usage limit is reached" | Your plan's or account's limit for now. The message says when it resets; you can also switch model in Settings. |
 | "…rejected that key" | Copy the whole key again, with no spaces. Check that your provider account has billing or credit set up. |
 | ChatGPT sign-in says its port is in use | Another sign-in (for example the Codex CLI) is using it: close that, then try again. |
 | The browser doesn't return to LifeHarness after signing in | Copy the address the browser ends on and paste it into the box LifeHarness shows. |
 | The AppImage doesn't start | Run it with `--no-sandbox`, or install the `.deb` instead. |
-| The app seems stuck | It restarts its own engine if it crashes. If not, quit and reopen. Logs are under **File → Open logs folder** (`~/.config/LifeHarness/logs`). |
+| Windows won't run the installer | SmartScreen blocks unsigned installers at first: click **More info → Run anyway**. |
+| The app seems stuck | It restarts its own engine if it crashes. If not, quit and reopen. Logs are under **File → Open logs folder** (`~/.config/LifeHarness/logs`, or `%APPDATA%\LifeHarness\logs` on Windows). |
 | A session stopped halfway | Click **Continue** or **Retry** under the conversation. Nothing you answered is lost. |
 
 **Still stuck, or found a bug?** Open an issue on [GitHub](https://github.com/eOvic/LifeHarness/issues), saying what you did and what you saw. Leave out personal details: your plans and conversations stay on your computer unless you paste them.
