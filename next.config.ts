@@ -12,6 +12,11 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@earendil-works/pi-coding-agent", "@earendil-works/pi-ai"],
   // Prompt files are read at runtime from ./prompts
   outputFileTracingIncludes: { "/api/**": ["./prompts/**"], "/**": ["./prompts/**"] },
+  // Never trace build outputs, sources or tooling into the server (a stray heuristic once pulled the
+  // desktop installers in; scripts/desktop-build.mjs also refuses such a build).
+  outputFileTracingExcludes: {
+    "/**": ["./dist-desktop/**", "./desktop-app/**", "./shots/**", "./docs/**", "./tests/**", "./scripts/**", "./build/**", "./electron/**", "./data/**"],
+  },
 };
 
 export default nextConfig;

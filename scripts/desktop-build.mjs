@@ -12,10 +12,22 @@ const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
 const skipNext = process.argv.includes("--skip-next");
 console.log(`1/4 next build (standalone)${skipNext ? ": skipped" : ""}`);
-if (!skipNext) run("npx next build", { LIFEHARNESS_STANDALONE: "1", NEXT_TELEMETRY_DISABLED: "1" });
+if (!skipNext) {
+  fs.rmSync(path.join(root, ".next/standalone"), { recursive: true, force: true }); // next build doesn't clear stale files here
+  run("npx next build", { LIFEHARNESS_STANDALONE: "1", NEXT_TELEMETRY_DISABLED: "1" });
+}
 
 console.log("2/4 assemble the server");
 const sa = path.join(root, ".next/standalone");
+// Guard: a dynamic file-system call can make Next trace the WHOLE project into the server (sources,
+// docs, even old installers). Next prints "Dynamic filesystem access causes tracing of the whole
+// project"; fix that call with /*turbopackIgnore: true*/. Never ship such a build.
+const expected = new Set([".next", "node_modules", "package.json", "server.js", "prompts", "public"]);
+const unexpected = fs.readdirSync(sa).filter((e) => !expected.has(e));
+if (unexpected.length) {
+  console.error(`✗ the standalone server contains project files it shouldn't: ${unexpected.join(", ")}\n  (look for "Dynamic filesystem access causes tracing of the whole project" in the build output)`);
+  process.exit(1);
+}
 fs.cpSync(".next/static", path.join(sa, ".next/static"), { recursive: true });
 if (fs.existsSync("public")) fs.cpSync("public", path.join(sa, "public"), { recursive: true });
 fs.cpSync("prompts", path.join(sa, "prompts"), { recursive: true });
