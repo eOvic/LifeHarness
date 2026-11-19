@@ -12,6 +12,7 @@ import type { AuthEvent, AuthInteraction, AuthPrompt } from "@earendil-works/pi-
 import { CLAUDE_CODE, claudeCodeStatus, type ClaudeCodeStatus } from "./claude-code";
 import { describeModelError, isAuthFailure, providerMessage } from "./errors";
 import { authFile, recommendedModel, resolveModel, runtime } from "./llm";
+import { isWindows } from "./platform";
 import { getSettings, saveSettings } from "./store";
 
 // ---- what we offer, and how it's presented -------------------------------------------------
@@ -58,7 +59,7 @@ export interface ProviderInfo {
 async function claudeCodeEntry(force = false): Promise<ProviderInfo> {
   const st = await claudeCodeStatus(force);
   const enabled = !!getSettings().claudeCode;
-  const status: ClaudeCodeStatus = { state: st.state, version: st.version, minimumVersion: st.minimumVersion, windows: process.platform === "win32" }; // no cache metadata
+  const status: ClaudeCodeStatus = { state: st.state, version: st.version, minimumVersion: st.minimumVersion, windows: isWindows() }; // no cache metadata
   const ready = st.state === "ok";
   return {
     id: CLAUDE_CODE,

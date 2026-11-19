@@ -3,12 +3,13 @@
 //   LIFEHARNESS_AUTH_FILE overrides the credentials file (tests, other users); helper files follow it.
 import os from "node:os";
 import path from "node:path";
+import { isMac, isWindows } from "./platform";
 
 export function configDir(): string {
   if (process.env.LIFEHARNESS_CONFIG_DIR) return process.env.LIFEHARNESS_CONFIG_DIR;
   const home = os.homedir();
-  if (process.platform === "darwin") return path.join(/*turbopackIgnore: true*/ home, "Library", "Application Support", "LifeHarness");
-  if (process.platform === "win32") return path.join(/*turbopackIgnore: true*/ process.env.APPDATA || path.join(home, "AppData", "Roaming"), "LifeHarness");
+  if (isMac()) return path.join(/*turbopackIgnore: true*/ home, "Library", "Application Support", "LifeHarness");
+  if (isWindows()) return path.join(/*turbopackIgnore: true*/ process.env.APPDATA || path.join(home, "AppData", "Roaming"), "LifeHarness");
   return path.join(/*turbopackIgnore: true*/ process.env.XDG_CONFIG_HOME || path.join(home, ".config"), "LifeHarness");
 }
 

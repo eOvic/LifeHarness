@@ -30,6 +30,15 @@ if (!skipNext) {
 
 console.log("2/4 assemble the server");
 const sa = path.join(root, ".next/standalone");
+// Guard: the server code must decide the OS at run time (src/server/platform.ts). Turbopack evaluates
+// `process.platform` conditions at build time, so a raw check would silently keep only this OS's
+// branch: the Windows names must still be in the compiled code.
+const hasWindowsCode = (dir) =>
+  fs.readdirSync(dir, { withFileTypes: true }).some((e) => (e.isDirectory() ? hasWindowsCode(path.join(dir, e.name)) : e.name.endsWith(".js") && fs.readFileSync(path.join(dir, e.name), "utf8").includes("claude.exe")));
+if (!hasWindowsCode(path.join(sa, ".next", "server"))) {
+  console.error("✗ OS checks were decided at build time (no claude.exe left in the server code): test the OS through src/server/platform.ts");
+  process.exit(1);
+}
 // Guard: a dynamic file-system call can make Next trace the WHOLE project into the server (sources,
 // docs, even old installers). Next prints "Dynamic filesystem access causes tracing of the whole
 // project"; fix that call with /*turbopackIgnore: true*/. Never ship such a build.
@@ -101,7 +110,7 @@ console.log("3/4 stage the Electron app");
 const app = path.join(root, "desktop-app");
 fs.rmSync(app, { recursive: true, force: true });
 fs.mkdirSync(app);
-for (const f of ["main.cjs", "preload.cjs", "icon.png"]) fs.copyFileSync(path.join("electron", f), path.join(app, f));
+for (const f of ["main.cjs", "preload.cjs", "window-state.cjs", "icon.png"]) fs.copyFileSync(path.join("electron", f), path.join(app, f));
 // The package names a neutral maintainer, never the builder's git identity (it ends up in the
 // .deb control file and inside the app). Publishing? Set LIFEHARNESS_MAINTAINER="Name <email>".
 const maintainer = /^(.+?)\s*<([^>]+)>$/.exec(process.env.LIFEHARNESS_MAINTAINER ?? "") ?? [null, "LifeHarness", "maintainer@lifeharness.invalid"];
@@ -126,7 +135,10 @@ fs.writeFileSync(
 
 console.log("4/4 electron-builder");
 const extra = process.argv.includes("--dir") ? " --dir" : "";
-fs.rmSync("dist-desktop", { recursive: true, force: true });
+// Clear this target's previous output only, so a Linux and a Windows build can sit side by side.
+const ownOutput = targetOs === "win32" ? /(-setup\.exe|-test\.zip|\.blockmap|\.nsis\.7z)$/ : /(\.deb|\.AppImage)$/;
+for (const e of fs.existsSync("dist-desktop") ? fs.readdirSync("dist-desktop") : [])
+  if (e === TARGET.unpacked || ownOutput.test(e) || e.startsWith("builder-") || e.startsWith(".")) fs.rmSync(path.join("dist-desktop", e), { recursive: true, force: true });
 // From Linux, the Windows installer (NSIS) and the .exe's icon and version info need Wine: a test build
 // skips them and zips the app instead.
 const testZip = " zip -c.win.signAndEditExecutable=false -c.win.artifactName='${productName}-${version}-${arch}-test.${ext}'";

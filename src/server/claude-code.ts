@@ -43,6 +43,7 @@ import {
   type ToolResultMessage,
 } from "@earendil-works/pi-ai";
 import { BRIDGE_NAME, createToolBridge, MCP_PREFIX, type BridgeCall, type ToolBridge } from "./claude-code-bridge";
+import { isWindows } from "./platform";
 import { LIVE_CONTEXT_MARKER } from "./prompts";
 
 export const CLAUDE_CODE = "claude-code"; // provider id
@@ -62,33 +63,85 @@ export interface ClaudeCodeStatus {
   windows?: boolean;
 }
 
-export function findClaude(): string | undefined {
+/** How to start Claude Code: the program, arguments that go before Claude Code's own, extra environment. */
+export interface ClaudeCommand {
+  file: string;
+  pre: string[];
+  env?: Record<string, string>;
+}
+
+const unquote = (dir: string) => dir.replace(/^"(.*)"$/, "$1"); // Windows PATH entries may be quoted
+const pathDirs = () => (process.env.PATH ?? "").split(path.delimiter).filter(Boolean).map(unquote);
+const isFile = (p: string) => {
+  try {
+    return fs.statSync(/*turbopackIgnore: true*/ p).isFile();
+  } catch {
+    return false;
+  }
+};
+
+// Found and fixed on a Windows PC: Claude Code is claude.exe there (Anthropic's installer, WinGet,
+// Scoop, Bun) or an npm/pnpm/yarn claude.cmd shim. No shell is ever used, so a shim is resolved to the
+// program it starts (resolveShim) instead of being run through cmd.exe.
+export function findClaude(): ClaudeCommand | undefined {
   const home = os.homedir();
-  const win = process.platform === "win32";
-  // No shell is ever used, so a .cmd-only install can't run and doesn't count.
-  const names = win ? ["claude.exe"] : ["claude"];
-  const npmBin = process.env.npm_config_prefix ? path.join(process.env.npm_config_prefix, win ? "" : "bin") : path.join(home, ".npm-global", "bin");
-  const known = [
-    path.join(home, ".local", "bin"),
-    path.join(home, ".claude", "local"),
-    npmBin,
-    "/opt/homebrew/bin",
-    "/usr/local/bin",
-    "/usr/bin",
-    path.join(home, ".nix-profile", "bin"),
-    ...(process.env.USER ? [path.join("/etc/profiles/per-user", process.env.USER, "bin")] : []),
-  ];
-  const dirs = [...(process.env.PATH ?? "").split(path.delimiter).filter(Boolean), ...known];
-  const candidates = process.env.LIFEHARNESS_CLAUDE_BIN ? [process.env.LIFEHARNESS_CLAUDE_BIN] : dirs.flatMap((d) => names.map((n) => path.resolve(/*turbopackIgnore: true*/ d, n)));
+  const win = isWindows();
+  const names = win ? ["claude.exe", "claude.cmd"] : ["claude"];
+  const npmPrefix = process.env.npm_config_prefix;
+  const known = win
+    ? [
+        path.join(home, ".local", "bin"), // Anthropic's installer (PowerShell)
+        path.join(home, ".claude", "local"),
+        npmPrefix || path.join(process.env.APPDATA || path.join(home, "AppData", "Roaming"), "npm"), // npm i -g
+        path.join(process.env.LOCALAPPDATA || path.join(home, "AppData", "Local"), "Microsoft", "WinGet", "Links"),
+        path.join(home, "scoop", "shims"),
+        path.join(home, ".bun", "bin"),
+      ]
+    : [
+        path.join(home, ".local", "bin"),
+        path.join(home, ".claude", "local"),
+        npmPrefix ? path.join(npmPrefix, "bin") : path.join(home, ".npm-global", "bin"),
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        "/usr/bin",
+        path.join(home, ".nix-profile", "bin"),
+        ...(process.env.USER ? [path.join("/etc/profiles/per-user", process.env.USER, "bin")] : []),
+      ];
+  const candidates = process.env.LIFEHARNESS_CLAUDE_BIN
+    ? [process.env.LIFEHARNESS_CLAUDE_BIN]
+    : [...pathDirs(), ...known].flatMap((d) => names.map((n) => path.resolve(/*turbopackIgnore: true*/ d, n)));
   for (const c of candidates) {
     try {
       fs.accessSync(/*turbopackIgnore: true*/ c, fs.constants.X_OK);
-      if (fs.statSync(/*turbopackIgnore: true*/ c).isFile()) return c;
+      if (!fs.statSync(/*turbopackIgnore: true*/ c).isFile()) continue;
+      const cmd = win && /\.(cmd|bat)$/i.test(c) ? resolveShim(c) : { file: c, pre: [] };
+      if (cmd) return cmd;
     } catch {
       /* not here */
     }
   }
   return undefined;
+}
+
+/** npm, pnpm and yarn shims (cmd-shim) end in `"%dp0%\<target>" %*`: run that target directly. Going
+ *  through cmd.exe would mangle the JSON arguments, and stopping cmd.exe would leave Claude Code running. */
+function resolveShim(shim: string, depth = 0): ClaudeCommand | undefined {
+  try {
+    const text = fs.readFileSync(/*turbopackIgnore: true*/ shim, "utf8");
+    const targets = [...text.matchAll(/"%(?:~dp0|dp0%)\\?([^"%]+)"/g)].map((m) => m[1]).filter((t) => !/(^|\\)node(\.exe)?$/i.test(t));
+    if (!targets.length) return undefined;
+    // The shim writes the path with backslashes: rebuild it with this OS's separator.
+    const target = path.join(/*turbopackIgnore: true*/ path.dirname(shim), ...targets[targets.length - 1].split(/[\\/]+/));
+    if (!isFile(target)) return undefined;
+    if (/\.exe$/i.test(target)) return { file: target, pre: [] };
+    if (/\.(cmd|bat)$/i.test(target)) return depth < 3 ? resolveShim(target, depth + 1) : undefined; // yarn: shim -> shim
+    if (!/\.[cm]?js$/i.test(target)) return undefined;
+    // Claude Code as JavaScript: run it on Node (beside the shim or on PATH), else on the Node built into LifeHarness.
+    const node = [path.dirname(shim), ...pathDirs()].map((d) => path.join(/*turbopackIgnore: true*/ d, "node.exe")).find(isFile);
+    return node ? { file: node, pre: [target] } : { file: process.execPath, pre: [target], env: { ELECTRON_RUN_AS_NODE: "1" } };
+  } catch {
+    return undefined;
+  }
 }
 
 const atLeast = (v: number[], min: number[]) => {
@@ -103,12 +156,12 @@ export async function claudeCodeStatus(force = false): Promise<ClaudeCodeStatus>
   if (!force && cached && Date.now() - cached.at < 60_000) return cached;
   const base = { version: null, minimumVersion: MINIMUM_VERSION };
   let status: ClaudeCodeStatus = { ...base, state: "not-found" };
-  const bin = findClaude();
-  if (bin) {
+  const cmd = findClaude();
+  if (cmd) {
     status = { ...base, state: "unchecked" };
     try {
       const out = await new Promise<string>((resolve, reject) =>
-        execFile(/*turbopackIgnore: true*/ bin, ["--version"], { cwd: os.tmpdir(), env: childEnv(), timeout: 5000, killSignal: "SIGKILL", maxBuffer: 4096, windowsHide: true }, (e, so) =>
+        execFile(/*turbopackIgnore: true*/ cmd.file, [...cmd.pre, "--version"], { cwd: os.tmpdir(), env: { ...childEnv(), ...cmd.env }, timeout: 5000, killSignal: "SIGKILL", maxBuffer: 4096, windowsHide: true }, (e, so) =>
           e ? reject(e) : resolve(String(so)),
         ),
       );
@@ -733,8 +786,8 @@ export function claudeCodeStream(model: Model<Api>, context: Context, options?: 
     let bridge: ToolBridge | undefined;
     try {
       const status = await claudeCodeStatus();
-      const bin = findClaude();
-      if (status.state === "not-found" || !bin) throw new Error(NOT_INSTALLED);
+      const cmd = findClaude();
+      if (status.state === "not-found" || !cmd) throw new Error(NOT_INSTALLED);
       if (status.state === "update-required") throw new Error(`Claude Code ${status.version} is older than LifeHarness needs (${MINIMUM_VERSION}). Update it with: claude update, then retry.`);
       if (status.state !== "ok") throw new Error("LifeHarness couldn't check Claude Code's version. Check your installation (claude --version), then retry.");
       if (options?.signal?.aborted) throw new Error("aborted");
@@ -748,7 +801,8 @@ export function claudeCodeStream(model: Model<Api>, context: Context, options?: 
       const mcpConfigFile = path.join(/*turbopackIgnore: true*/ priv, "mcp.json");
       fs.writeFileSync(/*turbopackIgnore: true*/ systemPromptFile, systemPrompt, { mode: 0o600 });
       fs.writeFileSync(/*turbopackIgnore: true*/ mcpConfigFile, bridge.mcpConfig, { mode: 0o600 }); // holds the bridge token
-      const child = spawn(/*turbopackIgnore: true*/ bin, launchArgs({ model: model.id, effort, systemPromptFile, mcpConfigFile, allowedTools: bridge.allowedTools }), { cwd, env, stdio: "pipe", windowsHide: true });
+      const args = launchArgs({ model: model.id, effort, systemPromptFile, mcpConfigFile, allowedTools: bridge.allowedTools });
+      const child = spawn(/*turbopackIgnore: true*/ cmd.file, [...cmd.pre, ...args], { cwd, env: cmd.env ? { ...env, ...cmd.env } : env, stdio: "pipe", windowsHide: true });
       proc = new ClaudeProcess(child, bridge, dirs, turn, chatId, configuration, structuredClone(visible(messages)), live);
       proc.start(JSON.stringify({ type: "user", message: { role: "user", content: replayContent(messages) } }), options?.signal);
     } catch (e) {
