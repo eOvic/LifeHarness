@@ -1,6 +1,6 @@
 appId: dev.lifeharness.desktop
 productName: LifeHarness
-copyright: Copyright © 2026
+copyright: Copyright © 2026 eOvic
 directories:
   app: desktop-app          # staged by scripts/desktop-build.mjs: main.cjs + preload.cjs, no npm deps
   output: dist-desktop

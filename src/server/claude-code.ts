@@ -6,7 +6,9 @@
 // routing, model access and billing; LifeHarness never sees a Claude password or token and doesn't
 // guarantee plan-only use (an API key in your environment, for example, is Claude Code's to use).
 //
-// Design (after LearnHarness's external-CLI provider, reimplemented here):
+// Design and parts of the code are adapted from LearnHarness's Claude Code provider
+// (src/agent/claude-code/ in https://github.com/amosblomqvist/learnharness, by Amos Blomqvist,
+// AGPL-3.0-only, the same license as LifeHarness):
 //   - Installation status is the version only: no auth-status command, no account details, no
 //     credential files, no model call.
 //   - Each process runs without a shell in an empty temporary folder, with our system prompt

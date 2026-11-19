@@ -153,7 +153,7 @@ LifeHarness owns its credentials. `src/server/llm.ts` creates pi's `ModelRuntime
 
 ## Claude through Claude Code
 
-Claude plans can't be connected directly (Anthropic forbids third-party Claude sign-in and handling plan credentials), but Anthropic allows running the **unmodified Claude Code** that the person signed into themselves. `src/server/claude-code.ts` makes it a model provider, following the design of LearnHarness's external-CLI provider (reimplemented here):
+Claude plans can't be connected directly (Anthropic forbids third-party Claude sign-in and handling plan credentials), but Anthropic allows running the **unmodified Claude Code** that the person signed into themselves. `src/server/claude-code.ts` makes it a model provider, following the design of LearnHarness's external-CLI provider, and adapting parts of its code (AGPL-3.0, like LifeHarness):
 
 - **Opt-in, version-only status.** Settings → AI models → Claude → Connect turns it on. LifeHarness checks only `claude --version` (minimum 2.1.259): no auth-status command, no account details, no credential files, no model call. Install, sign-in and billing stay Claude Code's (`claude auth login`).
 - **One isolated process per conversation, without a shell**, in an empty temporary folder:

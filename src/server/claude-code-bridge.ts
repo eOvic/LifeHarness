@@ -4,6 +4,8 @@
 // and hooks still decide). A call is admitted only with Claude Code's unique tool-use id
 // (_meta["claudecode/toolUseId"]) and a declared tool name, and its response is held until
 // LifeHarness has the real result: a profile update, a drafted plan, or a person's answer.
+// Adapted from LearnHarness's tool bridge (src/agent/claude-code/tool-bridge.ts in
+// https://github.com/amosblomqvist/learnharness, by Amos Blomqvist, AGPL-3.0-only).
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";

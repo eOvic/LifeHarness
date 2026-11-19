@@ -8,7 +8,7 @@ It runs on your own computer. Your plans and history stay there; only the conver
 
 ![The week view](docs/assets/desktop-week.png)
 
-**Contents:** [Install](#install) · [Connect an AI model](#first-run-connect-an-ai-model) · [Using LifeHarness](#using-lifeharness) · [Prayer times](#prayer-times-optional) · [Settings and shortcuts](#settings-themes-and-shortcuts) · [Your data and privacy](#your-data-and-privacy) · [Troubleshooting](#troubleshooting) · [For developers](#for-developers)
+**Contents:** [Install](#install) · [Connect an AI model](#first-run-connect-an-ai-model) · [Using LifeHarness](#using-lifeharness) · [Prayer times](#prayer-times-optional) · [Settings and shortcuts](#settings-themes-and-shortcuts) · [Your data and privacy](#your-data-and-privacy) · [Troubleshooting](#troubleshooting) · [For developers](#for-developers) · [License](#license)
 
 ---
 
@@ -259,4 +259,11 @@ How LifeHarness is built, tested and packaged is in **[docs/development.md](docs
 - [docs/DESIGN.md](docs/DESIGN.md): the design system.
 - [docs/ROADMAP.md](docs/ROADMAP.md): what's next.
 
-LifeHarness's design follows [LearnHarness](https://github.com/amosblomqvist/learnharness), an AI tutor built on the same idea of measuring before planning.
+---
+
+## License
+
+LifeHarness is free software under the [GNU AGPL v3](LICENSE). You may use, study, change and share it, including commercially. If you share a changed version, or run one as a service for other people, you must publish its source code under the same license. It comes with no warranty.
+
+- **Credits:** LifeHarness's design follows [LearnHarness](https://github.com/amosblomqvist/learnharness), an AI tutor by Amos Blomqvist built on the same idea of measuring before planning. Parts of LifeHarness's Claude Code provider are adapted from LearnHarness's, which is also AGPL v3.
+- **Third-party software:** the desktop app includes open-source packages and fonts under their own licenses (MIT, Apache-2.0, BSD, ISC, OFL). Their notices are in the app's `resources/licenses` folder, which **Settings → About → Licenses** opens.
