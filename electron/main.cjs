@@ -333,7 +333,8 @@ function buildMenu() {
 
 // "Open folder" buttons in Settings: only the app's own folders, never a path from the page.
 ipcMain.on("lh:open-folder", (_e, which) => {
-  const dir = { data: dataDir(), config: userData(), logs: logDir() }[which];
+  const licenses = app.isPackaged ? path.join(process.resourcesPath, "licenses") : null; // LICENSE + third-party notices
+  const dir = { data: dataDir(), config: userData(), logs: logDir(), licenses }[which];
   if (dir) shell.openPath(dir);
 });
 

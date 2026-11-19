@@ -235,6 +235,15 @@ export default function SettingsPage() {
             <section>
               <Label>About</Label>
               <p className="lh-mono mt-3 text-[12px] text-muted">LifeHarness {info.version}</p>
+              <p className="mt-2 text-[14px] leading-relaxed text-muted">
+                Free software under the GNU AGPL v3: you may use, study, change and share it, and it comes with no warranty. The software and fonts it includes keep their own
+                licenses.
+              </p>
+              {desktop()?.openFolder && (
+                <Button size="sm" variant="ghost" className="mt-2 -ml-2" data-lh="open-licenses" onClick={() => desktop()?.openFolder?.("licenses")}>
+                  <FolderOpen className="h-3.5 w-3.5" /> Licenses
+                </Button>
+              )}
             </section>
           )}
         </div>

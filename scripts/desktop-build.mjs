@@ -32,6 +32,9 @@ fs.cpSync(".next/static", path.join(sa, ".next/static"), { recursive: true });
 if (fs.existsSync("public")) fs.cpSync("public", path.join(sa, "public"), { recursive: true });
 fs.cpSync("prompts", path.join(sa, "prompts"), { recursive: true });
 fs.rmSync(path.join(sa, "data"), { recursive: true, force: true }); // never ship local data
+// Next traces its optional image library (sharp + libvips: 47 MB, LGPL) into every server. LifeHarness
+// has no <Image> (next.config.ts sets images.unoptimized), so it's never loaded: leave it out.
+for (const dir of ["node_modules/sharp", "node_modules/@img"]) fs.rmSync(path.join(sa, dir), { recursive: true, force: true });
 // Next embeds the build machine's project path (with the user name in it) in its config; the
 // packaged server never needs it (it starts from its own folder). Ship a neutral path instead.
 for (const f of ["server.js", ".next/required-server-files.json"]) {
@@ -76,6 +79,17 @@ fs.rmSync("dist-desktop", { recursive: true, force: true });
 run(`npx electron-builder --linux --publish never${extra}`);
 // Check what actually got packaged (the afterPack copy), not just the staging folder.
 run("node scripts/verify-server.mjs dist-desktop/linux-unpacked/resources/server");
+// Licenses: our LICENSE and the third-party notices ship (scripts/after-pack.cjs); sharp stays out.
+const res = "dist-desktop/linux-unpacked/resources";
+const problems = [
+  ...["licenses/LICENSE", "licenses/THIRD_PARTY_NOTICES.txt"].filter((f) => !fs.existsSync(path.join(res, f))).map((f) => `${f} is missing`),
+  ...["sharp", "@img"].filter((n) => fs.existsSync(path.join(res, "server/node_modules", n))).map((n) => `${n} was shipped`),
+];
+if (problems.length) {
+  console.error(`✗ licenses: ${problems.join("; ")}`);
+  process.exit(1);
+}
+console.log("✓ licenses: LICENSE and third-party notices shipped; sharp left out");
 // Privacy gate: nothing that identifies the builder may ship (home path, user name, git emails).
 run("node scripts/privacy-check.mjs dist-desktop/linux-unpacked/resources");
 console.log("\ndone: dist-desktop/");

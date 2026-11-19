@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
   ...(process.env.LIFEHARNESS_STANDALONE ? { output: "standalone" as const } : {}),
   // Shown in Settings → About (the desktop shell passes the same value at runtime).
   env: { LIFEHARNESS_VERSION: pkg.version },
+  // No <Image> anywhere: images are served as they are, so Next never needs its image library
+  // (sharp, which scripts/desktop-build.mjs leaves out of the desktop server).
+  images: { unoptimized: true },
   // The dev-tools badge would sit on top of the sidebar inside the desktop window.
   devIndicators: false,
   // The Pi engine is loaded natively by Node, not bundled (same approach as LearnHarness).

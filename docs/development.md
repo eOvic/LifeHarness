@@ -49,6 +49,14 @@ The build refuses to ship a broken or leaky package:
 - **The server folder may contain only runtime files.** A file-system call the bundler can't resolve once pulled the whole project in.
 - **Nothing may identify you.** `scripts/privacy-check.mjs` fails the build if your home path, user name or git email appears anywhere in the package.
 - **The package names a neutral maintainer.** Set `LIFEHARNESS_MAINTAINER="Name <email>"` to publish under your own.
+- **Licenses must ship.** `scripts/after-pack.cjs` puts `LICENSE` and `THIRD_PARTY_NOTICES.txt` in `resources/licenses/`. `scripts/third-party-notices.mjs` writes the notices file. It covers every package in the server and every production dependency the bundles can contain, plus the fonts in `licenses/fonts/`. The build fails if either file is missing.
+- **sharp stays out.** Next's image library (sharp and libvips: 47 MB, LGPL) is removed from the server, and `images.unoptimized` keeps Next from loading it. If you add `next/image`, revisit both.
+
+## Licensing
+
+LifeHarness is **AGPL-3.0-only**, like LearnHarness.
+- **Adapted code:** code adapted from another project must come under a compatible license, and its file must say where it came from. See the headers of `src/server/claude-code.ts` and `claude-code-bridge.ts`, adapted in part from LearnHarness.
+- **New fonts:** add their license to `licenses/fonts/` and to `FONTS` in `scripts/third-party-notices.mjs`.
 
 ## Environment variables
 
