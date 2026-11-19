@@ -1,7 +1,7 @@
 // One agent turn, streamed as NDJSON events (status, text deltas, tool activity, chat snapshots, done).
 import { isBusy, runTurn, TurnError, type TurnEvent, type TurnInput } from "@/src/server/agent";
 import { describeModelError } from "@/src/server/errors";
-import { defaultStream, isSubscription, NoModelError, resolveModel, runtime as modelRuntime } from "@/src/server/llm";
+import { billingOf, defaultStream, displayProviderName, NoModelError, resolveModel } from "@/src/server/llm";
 import { getSettings } from "@/src/server/store";
 
 export const runtime = "nodejs";
@@ -30,8 +30,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       stream: await defaultStream(),
       model,
       reasoning: getSettings().reasoning,
-      providerName: (await modelRuntime()).getProvider(model.provider)?.name ?? model.provider,
-      subscription: await isSubscription(model.provider),
+      providerName: await displayProviderName(model.provider),
+      billing: await billingOf(model.provider),
     };
   } catch (e) {
     const f = e instanceof NoModelError ? { message: e.message, action: "connect" as const } : describeModelError((e as Error).message);

@@ -58,6 +58,11 @@ export function liveContext(rec: ChatRecord, profile: Profile = getProfile()): s
   return parts.join("\n\n");
 }
 
+/** Separates the stable doctrine from the live context (clock, life map, open strands), which
+ *  changes on nearly every call. Providers that keep a process alive (Claude Code) use it to tell
+ *  "new instructions" from "fresh context". Harmless to every other provider. */
+export const LIVE_CONTEXT_MARKER = "<!-- lifeharness:live-context -->";
+
 export function systemPrompt(rec: ChatRecord): string {
-  return `${doctrine(rec.phase)}\n\n---\n\n${liveContext(rec)}`;
+  return `${doctrine(rec.phase)}\n\n---\n\n${LIVE_CONTEXT_MARKER}\n${liveContext(rec)}`;
 }

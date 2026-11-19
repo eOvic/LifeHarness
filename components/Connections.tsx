@@ -129,6 +129,7 @@ export default function Connections({ compact = false, onChange, onConnected }: 
   const flowFor = (id: string, method: Method) => (flow && flow.provider === id && flow.method === method ? flow : null);
 
   const signInRow = (p: ProviderInfo) => {
+    if (p.claudeCode) return <ClaudeCodeRow key="s-claude-code" p={p} refresh={load} onConnected={() => (onChange?.(), onConnected?.())} onDisconnected={() => onChange?.()} />;
     const f = flowFor(p.id, "oauth");
     const on = p.connected && p.via === "oauth";
     return (
@@ -291,6 +292,128 @@ export default function Connections({ compact = false, onChange, onConnected }: 
           {p.signInBlocked}
         </p>
       ))}
+    </div>
+  );
+}
+
+/** Claude through the person's own Claude Code sign-in: no tokens pass through LifeHarness. */
+function ClaudeCodeRow({ p, refresh, onConnected, onDisconnected }: { p: ProviderInfo; refresh: () => void; onConnected: () => void; onDisconnected: () => void }) {
+  const st = p.claudeCode!;
+  const [busy, setBusy] = useState(false);
+  const [setup, setSetup] = useState(false);
+  const [note, setNote] = useState<{ ok?: string; problem?: string } | null>(null);
+  const act = async (action: "enable" | "disable") => {
+    setBusy(true);
+    try {
+      const r = await postJson<{ problem?: string; modelName?: string; keptModel?: string }>("/api/connections/claude-code", { action });
+      if (action === "disable") {
+        setNote(null);
+        onDisconnected();
+      } else if (r.problem) {
+        setSetup(true);
+        setNote({ problem: r.problem });
+      } else {
+        setSetup(false);
+        setNote({ ok: r.keptModel ? `Connected. Still using ${r.keptModel}; switch under Model if you like.` : `Connected. LifeHarness will use ${r.modelName}.` });
+        onConnected();
+      }
+      refresh();
+    } catch (e) {
+      setNote({ problem: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Row
+      title="Claude"
+      blurb={p.signIn?.blurb}
+      right={
+        p.connected ? (
+          <Connected detail="Claude Code" onDisconnect={() => act("disable")} />
+        ) : (
+          <Button size="sm" onClick={() => act("enable")} disabled={busy} data-lh="connect-claude-code">
+            {busy ? <Spinner /> : "Connect"}
+          </Button>
+        )
+      }
+    >
+      {setup && !p.connected && (
+        <div className="mt-2.5 space-y-3 rounded-lg border border-line bg-canvas/60 px-3.5 py-3 text-[14px]" data-lh="claude-code-setup">
+          <p className="text-[13px] leading-relaxed text-muted">
+            Claude plans work in LifeHarness through <b className="text-ink">Claude Code</b>, Anthropic&apos;s own app. You install it and sign in there, with
+            Anthropic&apos;s own sign-in; LifeHarness only runs it, and never sees your Claude password, tokens or account. Claude Code decides how each request is
+            billed: your plan, if you signed in with it. Plans with Claude Code: Pro, Max, Ultra, Team, Enterprise.
+          </p>
+          <Step
+            n={1}
+            done={st.state === "ok"}
+            title={
+              st.state === "ok"
+                ? `Claude Code ${st.version} is installed`
+                : st.state === "update-required"
+                  ? `Update Claude Code (${st.version}; LifeHarness needs ${st.minimumVersion} or newer)`
+                  : st.state === "unchecked"
+                    ? "Claude Code was found, but its version couldn't be checked"
+                    : "Install Claude Code"
+            }
+          >
+            {st.state === "not-found" && (
+              <>
+                <Cmd text={INSTALL_CMD} />
+                <a href="https://code.claude.com/docs/en/setup" target="_blank" rel="noopener noreferrer" className="lh-mono inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.06em] text-muted hover:text-ink">
+                  Other ways to install <ExternalLink className="h-3 w-3" />
+                </a>
+              </>
+            )}
+            {st.state === "update-required" && <Cmd text="claude update" />}
+            {st.state === "unchecked" && <Cmd text="claude --version" />}
+          </Step>
+          <Step n={2} done={false} title="Sign in to Claude Code with your Claude plan, if you haven't (in a terminal)">
+            <Cmd text="claude auth login" />
+            <p className="text-[12.5px] text-muted">LifeHarness doesn&apos;t check this: it never reads your Claude account. If a session says Claude Code isn&apos;t signed in, run it.</p>
+          </Step>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button size="sm" variant="primary" onClick={() => act("enable")} disabled={busy}>
+              {busy ? <Spinner /> : "Check again"}
+            </Button>
+            {note?.problem && <span className="text-[13px] text-warn">{note.problem}</span>}
+          </div>
+        </div>
+      )}
+      {note?.ok && (
+        <p className="mt-2 flex items-center gap-2 text-[14px] text-ok" data-lh="claude-code-done">
+          <Check className="h-4 w-4" /> {note.ok}
+        </p>
+      )}
+      {!setup && note?.problem && <p className="mt-2 text-[13px] text-danger">{note.problem}</p>}
+    </Row>
+  );
+}
+
+// Anthropic's native installer (code.claude.com/docs/en/setup), for macOS, Linux and WSL.
+const INSTALL_CMD = ["curl -fsSL https://claude.ai/install.sh", "bash"].join(" | ");
+
+function Step({ n, done, title, children }: { n: number; done: boolean; title: string; children?: React.ReactNode }) {
+  return (
+    <div className="flex gap-3">
+      <span className={cx("lh-mono mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[10px]", done ? "border-ok/60 text-ok" : "border-line text-muted")}>{done ? <Check className="h-3 w-3" /> : n}</span>
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <p className={cx("text-[14px]", done ? "text-muted" : "text-ink")}>{title}</p>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Cmd({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex items-center gap-2">
+      <code className="lh-mono min-w-0 flex-1 truncate rounded-md border border-line bg-panel px-2.5 py-1.5 text-[12.5px] text-ink">{text}</code>
+      <Button size="sm" onClick={() => navigator.clipboard?.writeText(text).then(() => setCopied(true), () => {})}>
+        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? "Copied" : "Copy"}
+      </Button>
     </div>
   );
 }

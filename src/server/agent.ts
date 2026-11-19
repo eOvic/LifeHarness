@@ -41,8 +41,8 @@ export interface AgentDeps {
   maxCalls?: number;
   /** For error messages ("OpenAI rejected…") and the cost label. */
   providerName?: string;
-  /** Calls are covered by a subscription: the dollar figure is only an estimate at API prices. */
-  subscription?: boolean;
+  /** How calls are paid: a subscription (dollars are only an estimate), an API key, or Claude Code's own billing. */
+  billing?: "subscription" | "api" | "cli";
 }
 
 export class TurnError extends Error {
@@ -153,7 +153,8 @@ export async function runTurn(chatId: string, input: TurnInput, emit: (e: TurnEv
       const allowed = PHASE_TOOLS[rec.phase];
       const context = { systemPrompt: systemPrompt(rec), messages: rec.messages as Message[], tools: allowed.map((n) => TOOLS[n]) };
       emit({ type: "status", text: call === 0 ? "Thinking…" : "Continuing…" });
-      const s = deps.stream(deps.model, context, { reasoning: deps.reasoning ?? "medium" });
+      // sessionId: providers that keep state per conversation (Claude Code) never mix sessions.
+      const s = deps.stream(deps.model, context, { reasoning: deps.reasoning ?? "medium", sessionId: chatId });
       let thinkingAnnounced = false;
       for await (const ev of s) {
         if (ev.type === "text_delta") emit({ type: "text", delta: ev.delta });
@@ -171,7 +172,7 @@ export async function runTurn(chatId: string, input: TurnInput, emit: (e: TurnEv
         input: rec.usage.input + (msg.usage?.input ?? 0),
         output: rec.usage.output + (msg.usage?.output ?? 0),
         calls: rec.usage.calls + 1,
-        billing: deps.subscription ? "subscription" : "api",
+        billing: deps.billing ?? "api",
       };
       rec.model = { ref: `${deps.model.provider}/${deps.model.id}`, name: deps.model.name, provider: deps.providerName ?? deps.model.provider };
       if (msg.stopReason === "error" || msg.stopReason === "aborted") {
@@ -209,7 +210,7 @@ export async function runTurn(chatId: string, input: TurnInput, emit: (e: TurnEv
             rec.messages.push(toolResult(c, "Not shown: only ONE question per turn. Ask it next turn if still needed.", true));
             continue;
           }
-          const q = args as unknown as AskQuestionArgs;
+          const q = { ...(args as unknown as AskQuestionArgs) }; // a copy: the model's own call stays as it was
           if ((q.kind ?? "single") !== "text" && !(q.options?.length)) q.kind = "text";
           asked = true;
           rec.pending = { toolCallId: c.id, args: q };

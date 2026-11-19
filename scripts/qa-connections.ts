@@ -93,6 +93,17 @@ check("GitHub Copilot sign-in shows a device code", /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.
 await page.screenshot({ path: `${out}/4-copilot.png` });
 await page.getByRole("button", { name: "Cancel" }).first().click();
 
+// 4b. Claude through Claude Code: connects in one click when a new-enough Claude Code is installed
+//     (no model call), otherwise shows the setup steps. Disconnected again afterwards.
+await page.locator('[data-lh="connect-claude-code"]').click();
+await page.waitForTimeout(2500);
+const ccDone = await page.locator('[data-lh="claude-code-done"]').isVisible().catch(() => false);
+const ccSetup = await page.locator('[data-lh="claude-code-setup"]').isVisible().catch(() => false);
+check("Claude row connects through Claude Code or shows its setup steps", ccDone || ccSetup, ccDone ? "connected" : "setup steps shown");
+await page.screenshot({ path: `${out}/4b-claude.png` });
+if (ccDone) await page.getByRole("button", { name: "Disconnect" }).first().click();
+await page.waitForTimeout(800);
+
 // 5. Start page and a session both route to "connect a model"
 await page.goto(`${origin}/start`, { waitUntil: "networkidle" });
 check("start page asks to connect a model first", await page.locator('[data-lh="connect-first"]').isVisible().catch(() => false));

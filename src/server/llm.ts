@@ -5,26 +5,17 @@
 // sign-in or an API key; see connections.ts). Environment variables (ANTHROPIC_API_KEY, …) also work.
 //   <config> = $LIFEHARNESS_CONFIG_DIR, else ~/.config/LifeHarness (the desktop app's userData).
 //   LIFEHARNESS_AUTH_FILE overrides the credentials file (tests, other users).
-import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
 import type { Api, AssistantMessageEventStream, Context, Model, SimpleStreamOptions } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { authFile } from "./config-dir";
+import { CLAUDE_CODE, claudeCodeModels, claudeCodeStatus, claudeCodeStream } from "./claude-code";
 import { getSettings } from "./store";
 
 export type StreamFn = (model: Model<Api>, context: Context, options?: SimpleStreamOptions) => AssistantMessageEventStream;
 
-export function configDir(): string {
-  if (process.env.LIFEHARNESS_CONFIG_DIR) return process.env.LIFEHARNESS_CONFIG_DIR;
-  const home = os.homedir();
-  if (process.platform === "darwin") return path.join(/*turbopackIgnore: true*/ home, "Library", "Application Support", "LifeHarness");
-  if (process.platform === "win32") return path.join(/*turbopackIgnore: true*/ process.env.APPDATA || path.join(home, "AppData", "Roaming"), "LifeHarness");
-  return path.join(/*turbopackIgnore: true*/ process.env.XDG_CONFIG_HOME || path.join(home, ".config"), "LifeHarness");
-}
-
-export function authFile(): string {
-  return process.env.LIFEHARNESS_AUTH_FILE || path.join(/*turbopackIgnore: true*/ configDir(), "auth.json");
-}
+export { authFile, configDir } from "./config-dir";
 
 const g = globalThis as unknown as { __lhRuntime?: Promise<ModelRuntime> };
 
@@ -56,6 +47,7 @@ export class NoModelError extends Error {
 // A coaching interview is ~20 calls of careful conversation: we want each provider's strong,
 // balanced model (not its priciest, not a coding specialist). Patterns, newest version first.
 const PREFERENCES: Record<string, RegExp[]> = {
+  [CLAUDE_CODE]: [/^sonnet$/],
   anthropic: [/^claude-sonnet-\d+(?:-\d+)?$/, /^claude-opus-\d+(?:-\d+)?$/],
   openai: [/^gpt-\d+(?:\.\d+)?-sol$/, /^gpt-\d+(?:\.\d+)?$/],
   "openai-codex": [/^gpt-\d+(?:\.\d+)?-sol$/, /^gpt-\d+(?:\.\d+)?/],
@@ -70,7 +62,7 @@ const PREFERENCES: Record<string, RegExp[]> = {
   meta: [/^muse-spark-\d+(?:\.\d+)?$/],
 };
 /** When several providers are connected and none was picked: subscriptions first, then keys. */
-const PROVIDER_ORDER = ["openai", "github-copilot", "xai", "anthropic", "google", "openrouter", "openai-codex", "mistral", "deepseek"];
+const PROVIDER_ORDER = [CLAUDE_CODE, "openai", "github-copilot", "xai", "anthropic", "google", "openrouter", "openai-codex", "mistral", "deepseek"];
 
 const version = (id: string) => (id.match(/\d+/g) ?? []).map(Number);
 function newerFirst(a: string, b: string) {
@@ -102,15 +94,28 @@ export interface ModelInfo {
   subscription: boolean;
 }
 
+/** Claude via Claude Code: offered once turned on in Settings and a new-enough Claude Code is installed. */
+async function claudeCodeAvailable(): Promise<Model<Api>[]> {
+  if (!getSettings().claudeCode) return [];
+  return (await claudeCodeStatus()).state === "ok" ? claudeCodeModels() : [];
+}
+
+async function allAvailable(): Promise<readonly Model<Api>[]> {
+  const rt = await runtime();
+  return [...(await claudeCodeAvailable()), ...(await rt.getAvailable())];
+}
+
+const providerName = (rt: ModelRuntime, p: string) => (p === CLAUDE_CODE ? "Claude (via Claude Code)" : (rt.getProvider(p)?.name ?? p));
+
 export async function availableModels(): Promise<ModelInfo[]> {
   const rt = await runtime();
-  const models = await rt.getAvailable();
+  const models = await allAvailable();
   const providers = [...new Set(models.map((m) => m.provider))].sort((a, b) => providerRank(a) - providerRank(b) || a.localeCompare(b));
   const out: ModelInfo[] = [];
   for (const p of providers) {
     const rec = recommendedModel(p, models);
-    const name = rt.getProvider(p)?.name ?? p;
-    const sub = rt.isUsingSubscription(p);
+    const name = providerName(rt, p);
+    const sub = await isSubscription(p);
     for (const m of models.filter((x) => x.provider === p)) {
       out.push({ ref: `${p}/${m.id}`, provider: p, providerName: name, id: m.id, name: m.name, reasoning: !!m.reasoning, recommended: m === rec, subscription: sub });
     }
@@ -125,8 +130,7 @@ function byRef(models: readonly Model<Api>[], ref: string) {
 
 /** The model a turn will use: the one picked in Settings, else the best connected one. */
 export async function resolveModel(): Promise<Model<Api>> {
-  const rt = await runtime();
-  const available = await rt.getAvailable();
+  const available = await allAvailable();
   const chosen = getSettings().model;
   if (chosen) {
     const m = byRef(available, chosen);
@@ -143,13 +147,24 @@ export async function resolveModel(): Promise<Model<Api>> {
 /** Whether calls to this provider are covered by a subscription (so per-token cost is only an estimate). */
 export async function isSubscription(provider: string): Promise<boolean> {
   try {
+    if (provider === CLAUDE_CODE) return false; // Claude Code decides billing (see billingOf)
     return (await runtime()).isUsingSubscription(provider);
   } catch {
     return false;
   }
 }
 
+/** How a provider's calls are paid for, for the session header. */
+export async function billingOf(provider: string): Promise<"subscription" | "api" | "cli"> {
+  if (provider === CLAUDE_CODE) return "cli";
+  return (await isSubscription(provider)) ? "subscription" : "api";
+}
+
+export async function displayProviderName(provider: string): Promise<string> {
+  return providerName(await runtime(), provider);
+}
+
 export async function defaultStream(): Promise<StreamFn> {
   const rt = await runtime();
-  return (model, context, options) => rt.streamSimple(model, context, options);
+  return (model, context, options) => (model.provider === CLAUDE_CODE ? claudeCodeStream(model, context, options) : rt.streamSimple(model, context, options));
 }

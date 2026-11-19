@@ -9,8 +9,9 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { AuthEvent, AuthInteraction, AuthPrompt } from "@earendil-works/pi-ai";
+import { CLAUDE_CODE, claudeCodeStatus, type ClaudeCodeStatus } from "./claude-code";
 import { describeModelError, isAuthFailure, providerMessage } from "./errors";
-import { authFile, recommendedModel, runtime } from "./llm";
+import { authFile, recommendedModel, resolveModel, runtime } from "./llm";
 import { getSettings, saveSettings } from "./store";
 
 // ---- what we offer, and how it's presented -------------------------------------------------
@@ -35,28 +36,47 @@ const KEYS: Record<string, { label: string; blurb: string; url: string; rank: nu
 /** Sign-in methods deliberately not offered. */
 export const BLOCKED_SIGN_IN: Record<string, string> = {
   anthropic:
-    "Claude Pro/Max sign-in isn't offered: Anthropic doesn't allow apps other than its own to use it. Use an Anthropic API key instead.",
+    "Claude with your Pro or Max plan: use the Claude row under Subscriptions. It runs through Claude Code, Anthropic's own app, which you sign in to yourself; Anthropic doesn't allow other apps to handle Claude logins directly.",
 };
 
 export interface ProviderInfo {
   id: string;
   name: string;
+  /** Only for the Claude-through-Claude-Code entry. */
+  claudeCode?: ClaudeCodeStatus & { enabled: boolean };
   signIn?: { label: string; blurb?: string; subscription: boolean; featured: boolean; rank: number };
   signInBlocked?: string;
   key?: { label: string; blurb?: string; url?: string; featured: boolean; rank: number };
   connected: boolean;
-  via?: "api_key" | "oauth" | "environment" | "config";
+  via?: "api_key" | "oauth" | "environment" | "config" | "claude-code";
   /** Where an environment/config credential comes from, e.g. "ANTHROPIC_API_KEY". */
   source?: string;
   models: number;
   recommended?: { ref: string; name: string };
 }
 
+async function claudeCodeEntry(force = false): Promise<ProviderInfo> {
+  const st = await claudeCodeStatus(force);
+  const enabled = !!getSettings().claudeCode;
+  const status: ClaudeCodeStatus = { state: st.state, version: st.version, minimumVersion: st.minimumVersion }; // no cache metadata
+  const ready = st.state === "ok";
+  return {
+    id: CLAUDE_CODE,
+    name: "Claude",
+    signIn: { label: "Claude", blurb: "Pro, Max or Ultra plan · runs through Claude Code", subscription: true, featured: true, rank: 0 },
+    claudeCode: { ...status, enabled },
+    connected: enabled && ready,
+    via: enabled && ready ? "claude-code" : undefined,
+    models: enabled && ready ? 3 : 0,
+    recommended: { ref: `${CLAUDE_CODE}/sonnet`, name: "Claude Sonnet" },
+  };
+}
+
 export async function listProviders(): Promise<ProviderInfo[]> {
   const rt = await runtime();
   const stored = new Map((await rt.listCredentials()).map((c) => [c.providerId, c.type] as const));
   const available = await rt.getAvailable();
-  const out: ProviderInfo[] = [];
+  const out: ProviderInfo[] = [await claudeCodeEntry()];
   for (const p of rt.getProviders()) {
     const status = rt.getProviderAuthStatus(p.id);
     const via = stored.get(p.id) ?? (status.configured ? (status.source === "environment" ? "environment" : "config") : undefined);
@@ -91,7 +111,49 @@ export async function listProviders(): Promise<ProviderInfo[]> {
   return out;
 }
 
+/** Turn Claude-through-Claude-Code on or off ("check" just re-reads Claude Code's status). */
+export async function setClaudeCode(action: "enable" | "disable" | "check"): Promise<{ provider: ProviderInfo; model?: string; modelName?: string; keptModel?: string; problem?: string }> {
+  const s = getSettings();
+  if (action === "disable") {
+    saveSettings({ ...s, claudeCode: false, model: s.model?.startsWith(`${CLAUDE_CODE}/`) ? undefined : s.model });
+    return { provider: await claudeCodeEntry() };
+  }
+  const st = await claudeCodeStatus(true);
+  if (action === "check") return { provider: await claudeCodeEntry() };
+  const problem =
+    st.state === "not-found"
+      ? "Claude Code isn't installed yet (or LifeHarness can't find it)."
+      : st.state === "update-required"
+        ? `Claude Code ${st.version} is older than LifeHarness needs (${st.minimumVersion}).`
+        : st.state === "unchecked"
+          ? "LifeHarness couldn't check Claude Code's version."
+          : undefined;
+  if (problem) return { provider: await claudeCodeEntry(), problem };
+  // Start using it, unless a working model was explicitly picked.
+  let keptModel: string | undefined;
+  let model: string | undefined;
+  const picked = s.model;
+  saveSettings({ ...s, claudeCode: true });
+  if (picked && !picked.startsWith(`${CLAUDE_CODE}/`)) {
+    try {
+      const m = await resolveModel();
+      if (`${m.provider}/${m.id}` === picked) keptModel = m.name;
+    } catch {
+      /* nothing usable picked */
+    }
+  }
+  if (!keptModel) {
+    model = `${CLAUDE_CODE}/sonnet`;
+    saveSettings({ ...getSettings(), model });
+  }
+  return { provider: await claudeCodeEntry(), model, modelName: model ? "Claude Sonnet, through Claude Code" : undefined, keptModel };
+}
+
 export async function disconnect(provider: string) {
+  if (provider === CLAUDE_CODE) {
+    await setClaudeCode("disable");
+    return;
+  }
   const rt = await runtime();
   await rt.logout(provider);
   const s = getSettings();

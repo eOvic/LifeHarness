@@ -1,6 +1,6 @@
 {
   "name": "lifeharness",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "An agent harness for self-development: an AI interview turns what you want from life into a week you can actually live.",
   "type": "module",
@@ -22,6 +22,7 @@
   "dependencies": {
     "@earendil-works/pi-ai": "1.5.2",
     "@earendil-works/pi-coding-agent": "1.5.2",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "adhan": "^4.4.6",
     "lucide-react": "^1.75.0",
     "next": "16.4.6",

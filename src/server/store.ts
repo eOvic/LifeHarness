@@ -51,6 +51,8 @@ export interface Settings {
   reasoning?: "minimal" | "low" | "medium" | "high";
   /** Theme id (src/core/themes.ts) */
   theme?: string;
+  /** Use Claude through the person's own Claude Code sign-in (see claude-code.ts). */
+  claudeCode?: boolean;
 }
 export const getSettings = () => readJson<Settings>("settings.json", {});
 export const saveSettings = (s: Settings) => writeJson("settings.json", s);
@@ -120,7 +122,7 @@ export interface ChatRecord {
   answers: Record<string, QuestionAnswer>;
   proposal: Proposal | null;
   intakeSummary?: { summary: string; strands?: { name: string; current?: string; target?: string; notes?: string }[]; risks?: string[] };
-  usage: { cost: number; input: number; output: number; calls: number; billing?: "subscription" | "api" };
+  usage: { cost: number; input: number; output: number; calls: number; billing?: "subscription" | "api" | "cli" };
   /** The model of the latest call. */
   model?: { ref: string; name: string; provider: string };
   /** Friendly message + what the page should offer; the raw provider text is kept as detail. */

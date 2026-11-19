@@ -422,7 +422,7 @@ function AnswerView({ a }: { a: QuestionAnswer }) {
 function meta(chat: ChatView): string | undefined {
   const u = chat.usage;
   const n = chat.answeredCalls;
-  const cost = u.billing === "subscription" ? "subscription" : u.cost >= 0.005 ? `$${u.cost.toFixed(2)}` : "";
+  const cost = u.billing === "subscription" ? "subscription" : u.billing === "cli" ? "via Claude Code" : u.cost >= 0.005 ? `$${u.cost.toFixed(2)}` : "";
   const usage = n ? [`${n} call${n === 1 ? "" : "s"}`, cost].filter(Boolean).join(" · ") : "";
   return [chat.model?.name, usage].filter(Boolean).join(" · ") || undefined;
 }
