@@ -26,6 +26,7 @@ async function withApp(data: string, fn: (page: import("playwright-core").Page, 
   const config = fs.mkdtempSync(path.join(os.tmpdir(), "lh-readme-config-"));
   const app = await electron.launch({ executablePath: exe, args: ["--no-sandbox"], env: { ...process.env, LIFEHARNESS_DATA_DIR: data, XDG_CONFIG_HOME: config } as Record<string, string> });
   const page = await app.firstWindow();
+  await page.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\//, { timeout: 60_000 }); // past the "Starting…" page
   await page.waitForLoadState("networkidle");
   await app.evaluate(({ BrowserWindow }) => {
     const w = BrowserWindow.getAllWindows()[0];

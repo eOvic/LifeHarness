@@ -38,6 +38,7 @@ if (arg("--exe")) {
     env: { ...process.env, LIFEHARNESS_DATA_DIR: data, XDG_CONFIG_HOME: config } as Record<string, string>,
   });
   page = await app.firstWindow();
+  await page.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\//, { timeout: 60_000 }); // past the "Starting…" page
   await page.waitForLoadState("networkidle");
   origin = new URL(page.url()).origin;
   // Sign-in pages would open in the real browser: record them instead.

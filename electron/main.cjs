@@ -253,7 +253,34 @@ function attachContextMenu(w, origin) {
 // ---- window --------------------------------------------------------------------------------
 let win = null;
 
-function createWindow(url) {
+/** The page shown while the local server starts: a data: URL, so it needs nothing from the server.
+ *  First launch can take a few seconds (on Windows, antivirus scans the server's files), and without
+ *  it there was no window at all until then. Theme colors, the app icon, draggable like a title bar. */
+function startingPage({ color, symbolColor }) {
+  let icon = "";
+  try {
+    icon = `<img src="data:image/png;base64,${fs.readFileSync(path.join(__dirname, "icon.png")).toString("base64")}" alt="">`;
+  } catch {
+    /* no icon: text only */
+  }
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${PRODUCT}</title><style>
+html,body{height:100%;margin:0}
+body{display:grid;place-items:center;background:${color};color:${symbolColor};-webkit-app-region:drag;user-select:none;
+  font:12px/1.4 ui-monospace,"JetBrains Mono",SFMono-Regular,Consolas,"Liberation Mono",monospace}
+main{display:grid;justify-items:center;gap:20px}
+img{width:72px;height:72px}
+p{margin:0;letter-spacing:.08em;text-transform:uppercase;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:.8}}
+</style></head><body><main>${icon}<p>Starting ${PRODUCT}…</p></main></body></html>`;
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}
+
+/** The app's origin once its server is up: links and the context menu treat it as "in-app". */
+let appOrigin = "";
+const inApp = (target) => !!appOrigin && target.startsWith(appOrigin);
+
+/** Opens the window at once, on the "Starting…" page; openApp() loads the app into it. */
+function createWindow() {
   const state = loadState();
   const bounds = fitToScreen(state, screen); // never off-screen after a monitor or scaling change
   const chrome = chromeColors();
@@ -280,15 +307,13 @@ function createWindow(url) {
   });
   if (state.maximized) win.maximize();
 
-  const origin = new URL(url).origin;
-  attachContextMenu(win, origin);
   // Links: in-app navigation stays in-app; anything else opens in the real browser.
   win.webContents.setWindowOpenHandler(({ url: target }) => {
-    if (/^(https?|mailto):/.test(target) && !target.startsWith(origin)) shell.openExternal(target);
+    if (/^(https?|mailto):/.test(target) && !inApp(target)) shell.openExternal(target);
     return { action: "deny" };
   });
   win.webContents.on("will-navigate", (e, target) => {
-    if (!target.startsWith(origin)) {
+    if (!inApp(target)) {
       e.preventDefault();
       if (/^(https?|mailto):/.test(target)) shell.openExternal(target);
     }
@@ -297,6 +322,14 @@ function createWindow(url) {
   win.once("ready-to-show", () => win.show());
   win.on("close", () => saveState(win));
   win.on("closed", () => (win = null));
+  win.loadURL(startingPage(chrome)).catch(() => {}); // replaced by the app as soon as the server answers
+}
+
+/** Load the app into the window once its server is up. */
+function openApp(url) {
+  if (!win || win.isDestroyed()) return; // closed while starting
+  appOrigin = new URL(url).origin;
+  attachContextMenu(win, appOrigin);
   // Redirects (/ -> /start) and client-side navigations can abort the initial load promise: harmless.
   const start = url + (process.env.LIFEHARNESS_SHOT_PATH || "");
   win.loadURL(start).catch((err) => log(`initial load: ${err.message}`));
@@ -373,9 +406,10 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === "clipboard-sanitized-write"));
   try {
     rotate(path.join(logDir(), "main.log"));
+    createWindow(); // "Starting…" right away
     const url = DEV_URL || (await startServer());
     if (!DEV_URL) guardRequests(new URL(url).origin);
-    createWindow(url);
+    openApp(url);
   } catch (err) {
     log(`startup failed: ${err && err.stack}`);
     let tail = "";
@@ -393,7 +427,10 @@ app.on("window-all-closed", () => {
   if (!isMac) app.quit();
 });
 app.on("activate", () => {
-  if (!win && BrowserWindow.getAllWindows().length === 0 && DEV_URL) createWindow(DEV_URL);
+  if (!win && BrowserWindow.getAllWindows().length === 0 && DEV_URL) {
+    createWindow();
+    openApp(DEV_URL);
+  }
 });
 app.on("before-quit", stopServer);
 app.on("will-quit", stopServer);

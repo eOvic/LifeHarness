@@ -34,6 +34,13 @@ win.on("console", (m) => {
   if (m.type() === "error" || m.type() === "warning") problems.push(`console.${m.type()} @ ${win.url()}: ${m.text().slice(0, 300)}`);
 });
 win.on("pageerror", (e) => problems.push(`pageerror @ ${win.url()}: ${e.message.slice(0, 300)}`));
+// The window opens at once on a "Starting…" page (a data: URL), then the app loads when the server is up.
+if (win.url().startsWith("data:")) {
+  fs.mkdirSync(out, { recursive: true });
+  await win.screenshot({ path: path.join(out, "0-starting.png") }).catch(() => {});
+  console.log("✓ the window opened before the server was ready, on the Starting page");
+}
+await win.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\//, { timeout: 60_000 });
 await win.waitForLoadState("networkidle");
 const origin = new URL(win.url()).origin;
 
