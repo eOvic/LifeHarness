@@ -150,6 +150,11 @@ Mark each block as you go:
 
 The **Now** card in the sidebar always shows your current block and what's next, from any page.
 
+**Reminders** (desktop app): a notification when each block starts, with its if-then plan, and an evening check-in at 21:30 if some of the day's blocks aren't marked yet. Clicking one opens Today. Blocks you've already marked are skipped.
+- **When you close the window,** LifeHarness keeps running in the tray, so reminders keep coming. Quit from the tray icon.
+- **To change them, go to Settings → Reminders.** You can get them 5–15 minutes before a block starts, turn on prayer times, move or turn off the check-in, turn off background running, or start LifeHarness when you log in.
+- **On your phone,** use your calendar for now: see the next section.
+
 ### 4. The week and your phone's calendar
 
 **Week** shows the whole week as a calendar, with each kind of block in its own colour.
@@ -158,6 +163,8 @@ The **Now** card in the sidebar always shows your current block and what's next,
 - **Use the arrows** to move between weeks.
 
 To get your plan on your phone, click **Export .ics** and import the file into Google Calendar, Apple Calendar or Outlook. It contains your next 8 weeks. It's a snapshot, so export again after you change your plan.
+- **Reminders on the phone:** Apple Calendar and Outlook use the reminders in the file.
+- **Google Calendar ignores them.** Import into a separate calendar (for example "LifeHarness") and give that calendar a default notification, such as 5 minutes before.
 
 ### 5. Every week: the review
 
@@ -210,6 +217,7 @@ Should your local mosque or app differ by a minute or two, ask the coach to adju
 - **Appearance:** eight themes, dark and light. The desktop window's buttons follow the theme.
 - **Time:** your timezone and the first day of your week.
 - **Prayer times:** see [above](#prayer-times-optional).
+- **Reminders:** what to be reminded of and when, running in the background, and starting at login.
 - **Data & privacy:** where your files are, with **Open** buttons in the desktop app.
 
 ![Themes](docs/assets/themes.png)
@@ -260,6 +268,8 @@ The sidebar hides itself in narrow windows; **Ctrl+B** brings it back, and LifeH
 | The browser doesn't return to LifeHarness after signing in | Copy the address the browser ends on and paste it into the box LifeHarness shows. |
 | The AppImage doesn't start | Run it with `--no-sandbox`, or install the `.deb` instead. |
 | Windows won't run the installer | SmartScreen blocks unsigned installers at first: click **More info → Run anyway**. |
+| No notifications | Check **Settings → Reminders** and your system's Do Not Disturb. On Windows, install with the setup `.exe` (the test zip can't show notifications). On Linux, the tray icon needs your desktop's tray (AppIndicator) support, which Ubuntu has. |
+| Closing the window doesn't quit | That keeps reminders coming. Quit from the tray icon (or File → Quit), or turn off **Settings → Reminders → Background**. |
 | The app seems stuck | It restarts its own engine if it crashes. If not, quit and reopen. Logs are under **File → Open logs folder** (`~/.config/LifeHarness/logs`, or `%APPDATA%\LifeHarness\logs` on Windows). |
 | A session stopped halfway | Click **Continue** or **Retry** under the conversation. Nothing you answered is lost. |
 

@@ -45,10 +45,10 @@ Done:
 Next:
 - **Local models** (Ollama / LM Studio / llama.cpp, OpenAI-compatible): the fully private option for a life coach. Needs a model good enough at tool calls for the interview.
 - **Auto-update** (electron-updater with a GitHub Releases feed).
-- **System notifications** at block starts and for the evening "mark today".
-- **Tray / top-bar widget.**
-- Start on login.
-- macOS and Windows builds; code signing.
+- ~~System notifications~~ at block starts and for the evening "mark today": **done in 0.4.0**, with the tray and start on login.
+- **Google Calendar sync** (next): LifeHarness's own "LifeHarness" calendar, kept in step with the plan, for reminders on the phone. Uses the narrow `calendar.app.created` scope.
+- **Top-bar widget.**
+- ~~Windows build~~ (0.3.x). macOS; code signing.
 
 Original plan:
 

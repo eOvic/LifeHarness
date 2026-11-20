@@ -28,6 +28,7 @@ npx tsx scripts/ui-e2e.ts              # drives the real UI in Chrome (server mu
 npm run seed -- /tmp/demo                     # invented demo data, no model calls (--scene interview for a session in progress)
 npm run qa:desktop -- --data /tmp/demo        # drives the packaged app at 1440/960/760 px: console errors, overflow, screenshots
 npx tsx scripts/qa-connections.ts --exe dist-desktop/linux-unpacked/lifeharness   # every connect path; nothing is saved
+npx tsx scripts/qa-reminders.ts --exe dist-desktop/linux-unpacked/lifeharness --data /tmp/demo   # a reminder shown on time, click, tray, start at login (~2 min)
 npx tsx scripts/readme-shots.ts               # regenerates docs/assets from demo data (needs a desktop build)
 ```
 

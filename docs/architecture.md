@@ -151,6 +151,23 @@ LifeHarness owns its credentials. `src/server/llm.ts` creates pi's `ModelRuntime
 
 **Errors** a person can act on: `errors.ts` maps provider failures (rejected key, quota, network, overload, missing engine files) to one sentence and an action (`connect` or `retry`). Sessions keep the raw text as detail. A turn that can't start because nothing is connected returns 503 with `action: "connect"`, and the session shows the connect panel, then re-sends the same input once a model is connected.
 
+## Reminders
+
+The server decides what to remind, and the desktop shell shows it.
+- **The rules** live in `src/core/reminders.ts`, a pure module, tested directly:
+  - plan blocks at their start (or 5–15 minutes before), with the if-then plan;
+  - prayers, when they're wanted;
+  - an evening check-in, only while some of the day's tracked blocks are unmarked;
+  - nothing for fixed commitments, sleep or blocks already marked.
+- **`GET /api/reminders`** lists the next 36 hours, for today and tomorrow in the profile's timezone.
+- **`electron/main.cjs` schedules them.**
+  - It polls every 5 minutes, on wake and unlock, and when the page saves settings or adopts a plan (`refreshShell`).
+  - It sets a timer for anything due within the hour.
+  - Just before showing a reminder, it asks again, so a block marked meanwhile, or a changed plan, never sends a stale one.
+  - After sleep, reminders more than 2 minutes late are dropped rather than sent in a burst.
+- **The shell keeps running in the background** (the tray icon) while any reminder is on, so closing the window doesn't stop them. It says so the first time.
+- **"Start when I log in"** is opt-in. It uses an autostart entry on Linux and a login item on Windows, both starting with `--background`.
+
 ## Claude through Claude Code
 
 Claude plans can't be connected directly (Anthropic forbids third-party Claude sign-in and handling plan credentials), but Anthropic allows running the **unmodified Claude Code** that the person signed into themselves. `src/server/claude-code.ts` makes it a model provider, following the design of LearnHarness's external-CLI provider, and adapting parts of its code (AGPL-3.0, like LifeHarness):
