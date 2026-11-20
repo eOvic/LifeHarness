@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import type { Message } from "@earendil-works/pi-ai";
 import { systemTimezone } from "../core/time";
 import type { BlockSpec, Goal, Plan, Profile, Tracking, WeekSchedule } from "../core/types";
+import type { ReminderSettings } from "../core/reminders";
 import { isWindows } from "./platform";
 
 export const DATA_DIR = process.env.LIFEHARNESS_DATA_DIR || path.join(process.cwd(), "data");
@@ -79,6 +80,12 @@ export interface Settings {
   theme?: string;
   /** Use Claude through the person's own Claude Code sign-in (see claude-code.ts). */
   claudeCode?: boolean;
+  /** What to be reminded of (src/core/reminders.ts); missing fields take the defaults. */
+  reminders?: Partial<ReminderSettings>;
+  /** Desktop: keep running in the tray when the window closes, so reminders still come (default on). */
+  background?: boolean;
+  /** Desktop: start in the background when you log in (default off). */
+  atLogin?: boolean;
 }
 export const getSettings = () => readJson<Settings>("settings.json", {});
 export const saveSettings = (s: Settings) => writeJson("settings.json", s);
