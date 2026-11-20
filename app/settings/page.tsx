@@ -3,6 +3,7 @@ import { Check, ExternalLink, FolderOpen } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAppearance } from "@/components/appearance";
 import Connections from "@/components/Connections";
+import GoogleCalendar from "@/components/GoogleCalendar";
 import PageHeader from "@/components/PageHeader";
 import { Button, cx, Label, LinkButton, Spinner, Switch } from "@/components/ui";
 import { getJson, postJson } from "@/lib/api";
@@ -227,6 +228,8 @@ export default function SettingsPage() {
           )}
 
           {info && <Reminders info={info} faith={!!profile?.faith?.enabled} atLoginSupported={!!shell?.atLoginSupported} save={saveShell} />}
+
+          {info && <GoogleCalendar />}
 
           {info && (
             <section>
