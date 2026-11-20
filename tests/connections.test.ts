@@ -111,7 +111,8 @@ describe("privacy", () => {
     expect(csp).toContain("frame-ancestors 'none'");
     expect(res.headers.get("referrer-policy")).toBe("no-referrer");
   });
-  it("writes life data readable by the owner only", () => {
+  // Unix permissions; Windows has none of these bits (privacy there comes from the per-user profile folder).
+  it.skipIf(process.platform === "win32")("writes life data readable by the owner only", () => {
     writeJson("privacy-test.json", { ok: true });
     expect(fs.statSync(path.join(DATA_DIR, "privacy-test.json")).mode & 0o777).toBe(0o600);
     expect(fs.statSync(DATA_DIR).mode & 0o077).toBe(0);

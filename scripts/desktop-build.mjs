@@ -1,8 +1,8 @@
 // Build the desktop app: Next standalone server + Electron shell -> installers in dist-desktop/.
 //   npm run desktop:build            on Linux: .deb + AppImage; on Windows: a setup .exe (NSIS)
 //   npm run desktop:build -- --dir   unpacked only, fastest; for testing
-//   npm run desktop:build -- --win   on Linux: a portable Windows .zip for TESTING only (the installer and
-//                                    the .exe's icon and version info need Windows); releases build on Windows
+//   npm run desktop:build -- --win   on Linux: a portable Windows .zip for testing (the setup .exe needs
+//                                    Windows: build it there, or with .github/workflows/desktop.yml)
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -19,7 +19,7 @@ if (!TARGET) {
   process.exit(1);
 }
 const crossWin = targetOs === "win32" && process.platform !== "win32";
-if (crossWin) console.log("⚠ Windows build from Linux: a portable .zip for testing only (installer, icon and version info need Windows)");
+if (crossWin) console.log("⚠ Windows build from Linux: a portable .zip for testing (the setup .exe needs Windows)");
 
 const skipNext = process.argv.includes("--skip-next");
 console.log(`1/4 next build (standalone)${skipNext ? ": skipped" : ""}`);
@@ -139,10 +139,10 @@ const extra = process.argv.includes("--dir") ? " --dir" : "";
 const ownOutput = targetOs === "win32" ? /(-setup\.exe|-test\.zip|\.blockmap|\.nsis\.7z)$/ : /(\.deb|\.AppImage)$/;
 for (const e of fs.existsSync("dist-desktop") ? fs.readdirSync("dist-desktop") : [])
   if (e === TARGET.unpacked || ownOutput.test(e) || e.startsWith("builder-") || e.startsWith(".")) fs.rmSync(path.join("dist-desktop", e), { recursive: true, force: true });
-// From Linux, the Windows installer (NSIS) and the .exe's icon and version info need Wine: a test build
-// skips them and zips the app instead.
-const testZip = " zip -c.win.signAndEditExecutable=false -c.win.artifactName='${productName}-${version}-${arch}-test.${ext}'";
-run(`npx electron-builder ${TARGET.flag}${crossWin && !extra ? testZip : crossWin ? " -c.win.signAndEditExecutable=false" : ""} --publish never${extra}`);
+// The .exe's icon and version info are written on every OS (electron-builder 26 edits them in plain
+// JavaScript, no Wine). Only the NSIS installer needs Windows, so a build from Linux zips the app instead.
+const testZip = " zip -c.win.artifactName='${productName}-${version}-${arch}-test.${ext}'";
+run(`npx electron-builder ${TARGET.flag}${crossWin && !extra ? testZip : ""} --publish never${extra}`);
 const res = path.join("dist-desktop", TARGET.unpacked, "resources");
 // Check what actually got packaged (the afterPack copy), not just the staging folder.
 run(`node scripts/verify-server.mjs ${path.join(res, "server")}`);

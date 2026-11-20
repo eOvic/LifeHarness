@@ -1,0 +1,86 @@
+# Desktop installers, each built on its own OS (as LearnHarness does): the .deb and AppImage on Linux,
+# the setup .exe on Windows (with LifeHarness's icon and version info; unsigned, so SmartScreen warns).
+#
+#   Run by hand:      Actions -> Desktop builds -> Run workflow. The installers are attached to the run.
+#   Push a tag:       git tag v0.3.4 && git push origin v0.3.4 (must match package.json's version).
+#                     Also creates a DRAFT GitHub Release with the installers, for you to check and publish.
+#
+# Nothing runs on ordinary pushes. On a private repository this uses the account's Actions minutes.
+name: Desktop builds
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Linux, os: ubuntu-latest }
+          - { name: Windows, os: windows-latest }
+    runs-on: ${{ matrix.os }}
+    env:
+      # Tests and builds never touch real data or credentials.
+      LIFEHARNESS_DATA_DIR: ${{ runner.temp }}/lh-data
+      LIFEHARNESS_AUTH_FILE: ${{ runner.temp }}/lh-auth/auth.json
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          version="v$(node -p "require('./package.json').version")"
+          [ "$GITHUB_REF_NAME" = "$version" ] || { echo "tag $GITHUB_REF_NAME doesn't match package.json ($version)"; exit 1; }
+
+      - run: npm ci
+
+      - name: Typecheck
+        if: runner.os == 'Linux'
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+        # Windows runs the same tests for information until they've passed there once.
+        continue-on-error: ${{ runner.os == 'Windows' }}
+
+      - name: Build the installers
+        run: npm run desktop:build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LifeHarness-${{ matrix.name }}
+          path: |
+            dist-desktop/*.deb
+            dist-desktop/*.AppImage
+            dist-desktop/*-setup.exe
+          if-no-files-found: error
+
+  release:
+    name: Draft release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+      - name: Create a draft release with the installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" installers/* --draft --generate-notes --title "LifeHarness ${GITHUB_REF_NAME#v}" --repo "$GITHUB_REPOSITORY"
