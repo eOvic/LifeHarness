@@ -1,4 +1,5 @@
 // Manual edits to the life map (settings page). The interviewer uses the same merge.
+import { syncSoon } from "@/src/server/google-calendar";
 import { coverage, mergeProfile, type ProfilePatch } from "@/src/core/profile";
 import { execUpdateProfile } from "@/src/server/tools";
 import { getProfile } from "@/src/server/store";
@@ -16,6 +17,7 @@ export async function POST(req: Request) {
   if (!patch || typeof patch !== "object") return Response.json({ error: "Bad patch" }, { status: 400 });
   mergeProfile(getProfile(), patch); // throws on malformed input before anything is saved
   const out = await execUpdateProfile(patch);
+  syncSoon(); // times can move (sleep, prayers, timezone): the Google calendar follows
   const profile = getProfile();
   return Response.json({ profile, coverage: coverage(profile), message: out.text.split("\n")[0] });
 }

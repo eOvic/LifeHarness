@@ -1,5 +1,6 @@
 // Server start-up work (Node.js only). instrumentation.ts imports this in the Node.js runtime.
 import { sweepClaudeRuns } from "./claude-runs";
+import { startGoogleSchedule } from "./google-calendar";
 
 export function onServerStart() {
   // Remove Claude Code run folders nothing uses any more (servers that are gone, older versions'
@@ -9,6 +10,9 @@ export function onServerStart() {
   } catch {
     /* never block start-up */
   }
+
+  // Google Calendar (when connected): keep the next 14 days in step, at most every few hours.
+  startGoogleSchedule();
 
   // Desktop app: the shell keeps our stdin open for as long as it runs. When stdin ends (the app quit,
   // or the shell crashed or was killed), exit too, so no server is ever left running on its own.

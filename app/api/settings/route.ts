@@ -2,6 +2,7 @@ import path from "node:path";
 import { availableModels, authFile, resolveModel, type ModelInfo } from "@/src/server/llm";
 import { DATA_DIR, getSettings, saveSettings, type Settings } from "@/src/server/store";
 import { BEFORE_OPTIONS } from "@/src/core/reminders";
+import { syncSoon } from "@/src/server/google-calendar";
 import { THEMES } from "@/src/core/themes";
 import { isHM } from "@/src/core/time";
 
@@ -43,6 +44,7 @@ export async function POST(req: Request) {
     if (typeof r.before === "number" && BEFORE_OPTIONS.includes(r.before)) out.before = r.before;
     if (isHM(r.eveningAt)) out.eveningAt = r.eveningAt;
     next.reminders = out;
+    syncSoon(); // the Google calendar's reminders follow these
   }
   if (typeof body.background === "boolean") next.background = body.background;
   if (typeof body.atLogin === "boolean") next.atLogin = body.atLogin;
