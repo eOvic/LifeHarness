@@ -232,6 +232,7 @@ The sidebar hides itself in narrow windows; **Ctrl+B** brings it back, and LifeH
 **What stays on your computer:**
 - **Your life map, plans, tracking and conversations:** plain files readable only by your user account. In the desktop app they're in `~/.config/LifeHarness/data` on Linux and `%APPDATA%\LifeHarness\data` on Windows (**File → Open data folder**); in browser mode, in the project's `data/` folder.
 - **Your sign-ins and API keys:** in `auth.json` in the same `LifeHarness` folder, readable only by you, and never shown in the app. Disconnecting a provider removes its key.
+- **While Claude Code works:** it reads a copy of the coaching prompt, which includes your life map, from a private folder inside that same `LifeHarness` folder. The copy is deleted when the run ends, and the app clears any leftovers when it starts.
 
 **What leaves it:**
 - **During a conversation:** what you write, and your life map, go to the AI provider you connected, and nowhere else.
