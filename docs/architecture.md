@@ -168,6 +168,24 @@ The server decides what to remind, and the desktop shell shows it.
 - **The shell keeps running in the background** (the tray icon) while any reminder is on, so closing the window doesn't stop them. It says so the first time.
 - **"Start when I log in"** is opt-in. It uses an autostart entry on Linux and a login item on Windows, both starting with `--background`.
 
+## Google Calendar sync
+
+`src/server/google-calendar.ts` is optional and off until you connect. It keeps a "LifeHarness" calendar in step with the plan.
+- **The client is yours.** You register a Google Cloud OAuth client (type Desktop app) and enter it in Settings. A client shared with everyone would need Google's app review first.
+- **One scope,** `calendar.app.created`: make secondary calendars, and manage events only on those.
+- **Sign-in** is OAuth 2.0 for installed apps, with PKCE (S256) and a one-shot listener on 127.0.0.1. The listener ignores anything without the right `state`, and times out after 10 minutes. Google is asked for `access_type=offline` and `prompt=consent`, so a refresh token always comes back.
+- **Storage:** `<private folder>/google-calendar.json`, written 0600. It holds the client, the tokens, the calendar's id and the last sync. The page's status has none of the secrets, and nothing goes to the logs.
+- **Sync** covers the next 14 days.
+  - `src/core/calendar-events.ts` decides the events: plan blocks, plus prayers when prayer reminders are on, with a popup reminder that follows Settings → Reminders.
+  - Each event gets a stable id (`lh` + a hash of `<date>:<block key>`) and a content hash, so a pass only writes what changed.
+  - Events you deleted in Google come back (insert → 409 → update), and a deleted calendar is created again.
+  - Days before today, and events without LifeHarness's key, are never touched.
+- **Triggers:** connecting, adopting a plan, saving the profile or reminders (`syncSoon`, debounced), a 6-hour rolling check, and "Sync now". Passes run one at a time.
+- **Failures** become a plain message in Settings:
+  - **A withdrawn permission** (`invalid_grant`) clears the tokens and says to connect again.
+  - **Network errors** say Google couldn't be reached; the next pass retries.
+- **Tests** run against a fake Google (`tests/google-calendar.test.ts`). Endpoint overrides are accepted only on 127.0.0.1.
+
 ## Claude through Claude Code
 
 Claude plans can't be connected directly (Anthropic forbids third-party Claude sign-in and handling plan credentials), but Anthropic allows running the **unmodified Claude Code** that the person signed into themselves. `src/server/claude-code.ts` makes it a model provider, following the design of LearnHarness's external-CLI provider, and adapting parts of its code (AGPL-3.0, like LifeHarness):

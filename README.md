@@ -166,6 +166,22 @@ To get your plan on your phone, click **Export .ics** and import the file into G
 - **Reminders on the phone:** Apple Calendar and Outlook use the reminders in the file.
 - **Google Calendar ignores them.** Import into a separate calendar (for example "LifeHarness") and give that calendar a default notification, such as 5 minutes before.
 
+**Google Calendar sync (optional)** keeps a separate "LifeHarness" calendar in your Google account up to date with your plan: the next 14 days of blocks, each with a reminder that follows **Settings → Reminders**. Your phone then reminds you even when your computer is off, and you never re-export.
+- **What goes to Google:** block titles, times and if-then plans. Nothing else from your life map.
+- **LifeHarness only touches its own calendar.** It asks for the narrowest permission Google offers (`calendar.app.created`), so it can't read or change your other calendars.
+- **When it updates:** when you adopt a plan, change your profile or reminders, every few hours, and on **Sync now**.
+
+To connect, you register your own free Google client once (about 10 minutes). Google reviews apps before they can share one client with everyone; your own client needs no review for your own account.
+1. At [console.cloud.google.com](https://console.cloud.google.com), create a project and enable the **Google Calendar API**.
+2. In **Google Auth Platform**:
+   - **Branding:** any app name, and your email as the support contact.
+   - **Audience:** **External**, then **Publish app**. Without that, the connection ends every 7 days.
+   - **Data access:** add only `…/auth/calendar.app.created`.
+3. Under **Clients**, create a client of type **Desktop app**.
+4. In LifeHarness, go to **Settings → Google Calendar**, paste the Client ID and secret, and click **Connect**. Sign in, then continue past "Google hasn't verified this app": it's your own app.
+
+**Disconnect** withdraws the permission and forgets everything stored for Google. The LifeHarness calendar stays in your Google account; delete it there if you no longer want it.
+
 ### 5. Every week: the review
 
 **Review** shows how the week went:
@@ -218,6 +234,7 @@ Should your local mosque or app differ by a minute or two, ask the coach to adju
 - **Time:** your timezone and the first day of your week.
 - **Prayer times:** see [above](#prayer-times-optional).
 - **Reminders:** what to be reminded of and when, running in the background, and starting at login.
+- **Google Calendar:** connect, sync now, disconnect (see [above](#4-the-week-and-your-phones-calendar)).
 - **Data & privacy:** where your files are, with **Open** buttons in the desktop app.
 
 ![Themes](docs/assets/themes.png)
@@ -245,6 +262,7 @@ The sidebar hides itself in narrow windows; **Ctrl+B** brings it back, and LifeH
 **What leaves it:**
 - **During a conversation:** what you write, and your life map, go to the AI provider you connected, and nowhere else.
 - **Prayer times:** the city you type is looked up once on OpenStreetMap, and coordinates are kept to about 1 km.
+- **Google Calendar, only if you connect it:** block titles, times and if-then plans for the next 14 days go to the "LifeHarness" calendar in your Google account. The client secret and Google's tokens are stored in `google-calendar.json` beside `auth.json`, readable only by you, and never shown in the app.
 
 **What doesn't happen:** LifeHarness has no analytics and makes no background connections. Its local server only answers your own computer.
 
@@ -270,6 +288,9 @@ The sidebar hides itself in narrow windows; **Ctrl+B** brings it back, and LifeH
 | Windows won't run the installer | SmartScreen blocks unsigned installers at first: click **More info → Run anyway**. |
 | No notifications | Check **Settings → Reminders** and your system's Do Not Disturb. On Windows, install with the setup `.exe` (the test zip can't show notifications). On Linux, the tray icon needs your desktop's tray (AppIndicator) support, which Ubuntu has. |
 | Closing the window doesn't quit | That keeps reminders coming. Quit from the tray icon (or File → Quit), or turn off **Settings → Reminders → Background**. |
+| Google: "Google hasn't verified this app" | Expected for your own client. Click **Advanced → Go to LifeHarness**. |
+| Google: the connection ends after a week | Your Google project is still in **Testing**: under **Google Auth Platform → Audience**, click **Publish app**, then connect again. |
+| Google: "Calendar API has not been used in project…" | Enable the **Google Calendar API** in that Google Cloud project, wait a minute, then **Sync now**. |
 | The app seems stuck | It restarts its own engine if it crashes. If not, quit and reopen. Logs are under **File → Open logs folder** (`~/.config/LifeHarness/logs`, or `%APPDATA%\LifeHarness\logs` on Windows). |
 | A session stopped halfway | Click **Continue** or **Retry** under the conversation. Nothing you answered is lost. |
 
