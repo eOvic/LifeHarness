@@ -43,6 +43,7 @@ import {
   type ToolResultMessage,
 } from "@earendil-works/pi-ai";
 import { BRIDGE_NAME, createToolBridge, MCP_PREFIX, type BridgeCall, type ToolBridge } from "./claude-code-bridge";
+import { makeRunDir } from "./claude-runs";
 import { isWindows } from "./platform";
 import { LIVE_CONTEXT_MARKER } from "./prompts";
 
@@ -793,9 +794,10 @@ export function claudeCodeStream(model: Model<Api>, context: Context, options?: 
       if (options?.signal?.aborted) throw new Error("aborted");
       let proc: ClaudeProcess | undefined;
       bridge = await createToolBridge(tools, { onCall: () => proc?.flushAdmissions(), onError: (e) => proc?.fail(e.message) });
-      const cwd = fs.mkdtempSync(path.join(/*turbopackIgnore: true*/ os.tmpdir(), "lifeharness-claude-cwd-"));
+      // Inside the app's own private folder, never the system temp folder (claude-runs.ts).
+      const cwd = makeRunDir("lifeharness-claude-cwd-");
       dirs.push(cwd);
-      const priv = fs.mkdtempSync(path.join(/*turbopackIgnore: true*/ os.tmpdir(), "lifeharness-claude-"));
+      const priv = makeRunDir("lifeharness-claude-");
       dirs.push(priv);
       const systemPromptFile = path.join(/*turbopackIgnore: true*/ priv, "system-prompt.md");
       const mcpConfigFile = path.join(/*turbopackIgnore: true*/ priv, "mcp.json");

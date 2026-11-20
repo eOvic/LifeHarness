@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { findClaude } from "@/src/server/claude-code";
+import { makeRunDir, runsRoot, sweepClaudeRuns } from "@/src/server/claude-runs";
 import { replaceFile } from "@/src/server/store";
 
 const ENV_KEYS = ["PATH", "HOME", "APPDATA", "LOCALAPPDATA", "USER", "npm_config_prefix", "LIFEHARNESS_CLAUDE_BIN", "LIFEHARNESS_PLATFORM"];
@@ -135,6 +136,37 @@ describe("saving while another program holds the file", () => {
     expect(() => replaceFile(tmp, target, () => { calls++; throw busy("EPERM"); })).toThrow("EPERM");
     expect(calls).toBe(1);
     expect(fs.existsSync(tmp)).toBe(false);
+  });
+});
+
+describe("Claude Code run folders (they hold the coaching prompt, with the person's life context)", () => {
+  const folder = (p: string, ageMs = 0) => {
+    fs.mkdirSync(p, { recursive: true });
+    fs.writeFileSync(path.join(p, "system-prompt.md"), "life context");
+    if (ageMs) fs.utimesSync(p, new Date(Date.now() - ageMs), new Date(Date.now() - ageMs));
+  };
+
+  it("live in the app's own private folder, not the system temp folder", () => {
+    process.env.LIFEHARNESS_AUTH_FILE = path.join(root, "config", "auth.json");
+    const dir = makeRunDir("lifeharness-claude-");
+    expect(dir.startsWith(runsRoot() + path.sep)).toBe(true);
+    expect(runsRoot()).toBe(path.join(root, "config", "claude-code", "runs"));
+    expect(fs.readdirSync(path.dirname(dir))).toContain(path.basename(dir));
+  });
+
+  it("start-up removes folders of servers that are gone and old versions' temp leftovers, nothing else", () => {
+    const runs = path.join(root, "runs");
+    const tmp = path.join(root, "tmp");
+    folder(path.join(runs, "99999999-a1b2c3d4")); // a server that's gone
+    folder(path.join(runs, `${process.ppid}-e5f6a7b8`)); // a server that's running
+    folder(path.join(runs, "not-a-run")); // not one of ours
+    folder(path.join(tmp, "lifeharness-claude-Ab12Cd"), 3_600_000); // left by 0.3.3
+    folder(path.join(tmp, "lifeharness-claude-cwd-Ef34Gh"), 3_600_000);
+    folder(path.join(tmp, "lifeharness-claude-Ij56Kl")); // minutes old: an older LifeHarness may be running
+    folder(path.join(tmp, "another-app"), 3_600_000);
+    expect(sweepClaudeRuns({ root: runs, tmp })).toBe(4);
+    expect(fs.readdirSync(runs)).toEqual([`${process.ppid}-e5f6a7b8`]);
+    expect(fs.readdirSync(tmp).sort()).toEqual(["another-app", "lifeharness-claude-Ij56Kl"]);
   });
 });
 
