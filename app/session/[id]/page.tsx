@@ -12,6 +12,7 @@ import { refreshSidebar } from "@/components/Shell";
 import { Button, cx, IconButton, Label, Segmented, Spinner } from "@/components/ui";
 import { ApiError, getJson, postJson, streamTurn, type ChatView } from "@/lib/api";
 import type { Strand } from "@/src/core/profile";
+import { desktop } from "@/lib/desktop";
 import type { Plan, Profile } from "@/src/core/types";
 import type { QuestionAnswer } from "@/src/server/store";
 import type { ViewItem } from "@/src/server/view";
@@ -144,6 +145,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   const adopt = async () => {
     try {
       const plan = await postJson<Plan>("/api/plan/adopt", { chatId: id });
+      desktop()?.refreshShell?.(); // reminders follow the new plan at once
       const text = `I've adopted the plan (v${plan.version}).`;
       run({ type: "message", text }, (c) => ({
         ...c,

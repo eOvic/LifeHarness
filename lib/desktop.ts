@@ -5,6 +5,10 @@ export interface DesktopBridge {
   setChrome: (c: { background: string; symbol: string }) => void;
   /** Open one of the app's own folders in the file manager (older shells don't have it). */
   openFolder?: (which: "data" | "config" | "logs" | "licenses") => void;
+  /** Re-read reminders, background and login settings now (after saving them or adopting a plan). */
+  refreshShell?: () => void;
+  /** What this shell can do: starting at login needs the installed app. */
+  shellInfo?: () => Promise<{ atLoginSupported: boolean }>;
 }
 
 export function desktop(): DesktopBridge | undefined {

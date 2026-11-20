@@ -12,7 +12,7 @@
  * the top-right corner (titleBarOverlay) in the theme's colors, and the page leaves room for
  * them with env(titlebar-area-*).
  */
-const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell, session } = require("electron");
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, powerMonitor, screen, shell, session, Tray } = require("electron");
 const { fitToScreen } = require("./window-state.cjs");
 const { randomBytes } = require("node:crypto");
 const { spawn } = require("node:child_process");
@@ -325,13 +325,14 @@ function createWindow() {
   win.loadURL(startingPage(chrome)).catch(() => {}); // replaced by the app as soon as the server answers
 }
 
-/** Load the app into the window once its server is up. */
-function openApp(url) {
-  if (!win || win.isDestroyed()) return; // closed while starting
+/** Load the app into the window once its server is up (optionally on a page, such as /today). */
+function openApp(url, page = "") {
+  appUrl = url;
   appOrigin = new URL(url).origin;
+  if (!win || win.isDestroyed()) return; // closed while starting, or started in the background
   attachContextMenu(win, appOrigin);
   // Redirects (/ -> /start) and client-side navigations can abort the initial load promise: harmless.
-  const start = url + (process.env.LIFEHARNESS_SHOT_PATH || "");
+  const start = url + (page || process.env.LIFEHARNESS_SHOT_PATH || "");
   win.loadURL(start).catch((err) => log(`initial load: ${err.message}`));
 
   // Automation hook: LIFEHARNESS_SHOT=/path.png [LIFEHARNESS_SHOT_PATH=/today] captures the window, then quits.
@@ -350,6 +351,185 @@ function openApp(url) {
       }, Number(process.env.LIFEHARNESS_SHOT_DELAY || 2500));
     });
   }
+}
+
+// ---- background, tray, reminders, start at login ---------------------------------------------
+// Reminders (src/core/reminders.ts; listed by the server at /api/reminders) need LifeHarness running.
+// With "Run in the background" on (the default while any reminder is on), closing the window keeps the
+// app in the tray; "Start when I log in" (opt-in) starts it there.
+const BACKGROUND_ARG = "--background";
+let appUrl = "";
+let tray = null;
+
+/** The shell's own settings, read from settings.json (the server writes it). */
+function shellSettings() {
+  let s = {};
+  try {
+    s = JSON.parse(fs.readFileSync(path.join(dataDir(), "settings.json"), "utf8"));
+  } catch {
+    /* none yet: the defaults */
+  }
+  const r = { blocks: true, evening: true, prayers: false, ...(s.reminders || {}) }; // defaults as in src/core/reminders.ts
+  const remindersOn = !!(r.blocks || r.evening || r.prayers);
+  return { background: remindersOn && s.background !== false, atLogin: remindersOn && s.atLogin === true };
+}
+
+/** Bring the window back (re-creating it if it was closed to the tray), optionally on a page. */
+function showApp(page = "") {
+  if (win && !win.isDestroyed()) {
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+    if (page && appOrigin) win.loadURL(appOrigin + page).catch(() => {});
+    return;
+  }
+  createWindow();
+  if (appUrl) openApp(appUrl, page);
+}
+
+function updateTray() {
+  const want = shellSettings().background;
+  if (want && !tray) {
+    tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "icon.png")).resize({ width: 24, height: 24 }));
+    tray.setToolTip(PRODUCT);
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: `Open ${PRODUCT}`, click: () => showApp() },
+        { label: "Today", click: () => showApp("/today") },
+        { type: "separator" },
+        { label: `Quit ${PRODUCT}`, click: () => app.quit() },
+      ]),
+    );
+    tray.on("click", () => showApp());
+  } else if (!want && tray) {
+    tray.destroy();
+    tray = null;
+  }
+}
+
+/** Start at login, in the background (opt-in). Linux has no login-item API: an autostart entry instead. */
+function applyLoginItem() {
+  if (!app.isPackaged) return; // a development run never registers itself
+  const on = shellSettings().atLogin;
+  try {
+    if (process.platform === "linux") {
+      const file = path.join(app.getPath("appData"), "autostart", "lifeharness.desktop");
+      if (!on) {
+        fs.rmSync(file, { force: true });
+        return;
+      }
+      const exe = process.env.APPIMAGE || process.execPath; // an AppImage runs from a temporary mount
+      const args = [BACKGROUND_ARG, ...(process.env.APPIMAGE ? ["--no-sandbox"] : [])].join(" ");
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(
+        file,
+        `[Desktop Entry]\nType=Application\nName=${PRODUCT}\nComment=Reminders for your plan\nExec="${exe}" ${args}\nIcon=lifeharness\nTerminal=false\nNoDisplay=true\nX-GNOME-Autostart-enabled=true\n`,
+      );
+    } else {
+      app.setLoginItemSettings({ openAtLogin: on, args: [BACKGROUND_ARG] });
+    }
+  } catch (err) {
+    log(`login item: ${err.message}`);
+  }
+}
+
+/** GET from the app's own server, with the per-launch secret (the page gets it from guardRequests). */
+function apiGet(p) {
+  return new Promise((resolve, reject) => {
+    if (!appOrigin) return reject(new Error("the server isn't up"));
+    const req = http.get(appOrigin + p, { headers: { [SECRET_HEADER]: apiSecret } }, (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => (body += c));
+      res.on("end", () => {
+        if (res.statusCode !== 200) return reject(new Error(`${p}: HTTP ${res.statusCode}`));
+        try {
+          resolve(JSON.parse(body));
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(10_000, () => req.destroy(new Error(`${p}: timeout`)));
+  });
+}
+
+const shownReminders = new Set(); // each reminder id is shown once per run
+const liveNotifications = new Set(); // keep references: a garbage-collected notification loses its click handler
+let reminderTimers = [];
+let reminderLoop = null;
+
+function notify(title, body, page) {
+  if (!Notification.isSupported()) return;
+  const n = new Notification({ title, body, icon: path.join(__dirname, "icon.png") });
+  liveNotifications.add(n);
+  if (liveNotifications.size > 20) liveNotifications.delete(liveNotifications.values().next().value);
+  n.on("click", () => showApp(page));
+  n.on("close", () => liveNotifications.delete(n));
+  n.show();
+}
+
+/** Fetch what's due in the next hour and set a timer for each (the list covers 36 hours). */
+async function refreshReminders() {
+  if (!appOrigin || !Notification.isSupported()) return;
+  let items;
+  try {
+    items = (await apiGet("/api/reminders")).items || [];
+  } catch (err) {
+    log(`reminders: ${err.message}`);
+    return;
+  }
+  for (const t of reminderTimers) clearTimeout(t);
+  reminderTimers = [];
+  const now = Date.now();
+  for (const r of items) {
+    const wait = Date.parse(r.at) - now;
+    if (shownReminders.has(r.id) || wait > 65 * 60_000) continue; // later ones: a later refresh schedules them
+    reminderTimers.push(setTimeout(() => fireReminder(r.id), Math.max(0, wait)));
+  }
+  log(`reminders: ${items.length} listed, ${reminderTimers.length} within the hour`); // counts only
+}
+
+/** Ask again just before showing: the block may have been marked, or the plan changed, meanwhile. */
+async function fireReminder(id) {
+  if (shownReminders.has(id)) return;
+  let r;
+  try {
+    r = ((await apiGet("/api/reminders")).items || []).find((x) => x.id === id);
+  } catch {
+    return;
+  }
+  if (!r || shownReminders.has(id)) return;
+  shownReminders.add(id);
+  notify(r.title, r.body, r.path);
+  log(`reminder shown (${id.split(":")[0]})`); // the kind only: logs stay free of plan details
+}
+
+function startReminders() {
+  refreshReminders();
+  if (reminderLoop) return;
+  reminderLoop = setInterval(refreshReminders, 5 * 60_000);
+  powerMonitor.on("resume", refreshReminders); // timers stand still while the computer sleeps
+  powerMonitor.on("unlock-screen", refreshReminders);
+}
+
+/** The first time the window closes to the tray, say so (once). */
+function noteStillRunning() {
+  const file = path.join(userData(), "shell-state.json");
+  let st = {};
+  try {
+    st = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    /* first time */
+  }
+  if (st.backgroundNoticeShown) return;
+  try {
+    fs.writeFileSync(file, JSON.stringify({ ...st, backgroundNoticeShown: true }));
+  } catch {
+    /* best effort */
+  }
+  notify(`${PRODUCT} is still running`, "Reminders keep coming. Quit from the tray icon, or change this in Settings → Reminders.", "/settings");
 }
 
 function buildMenu() {
@@ -393,12 +573,15 @@ ipcMain.on("lh:set-chrome", (e, c) => {
   }
 });
 
-app.on("second-instance", () => {
-  if (win) {
-    if (win.isMinimized()) win.restore();
-    win.focus();
-  }
+app.on("second-instance", () => showApp()); // also brings it back from the tray
+
+// The page asks after saving reminder settings or adopting a plan; and what this shell can do.
+ipcMain.on("lh:refresh-shell", () => {
+  updateTray();
+  applyLoginItem();
+  refreshReminders();
 });
+ipcMain.handle("lh:shell-info", () => ({ atLoginSupported: app.isPackaged }));
 
 app.whenReady().then(async () => {
   buildMenu();
@@ -406,10 +589,15 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === "clipboard-sanitized-write"));
   try {
     rotate(path.join(logDir(), "main.log"));
-    createWindow(); // "Starting…" right away
+    // Started at login: stay in the tray until needed (only while reminders keep it running).
+    const hidden = process.argv.includes(BACKGROUND_ARG) && shellSettings().background;
+    if (!hidden) createWindow(); // "Starting…" right away
     const url = DEV_URL || (await startServer());
     if (!DEV_URL) guardRequests(new URL(url).origin);
     openApp(url);
+    updateTray();
+    applyLoginItem();
+    startReminders();
   } catch (err) {
     log(`startup failed: ${err && err.stack}`);
     let tail = "";
@@ -424,13 +612,12 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
+  // Reminders keep running in the tray; otherwise closing the window quits (except on macOS).
+  if (!quitting && appUrl && shellSettings().background) return noteStillRunning();
   if (!isMac) app.quit();
 });
 app.on("activate", () => {
-  if (!win && BrowserWindow.getAllWindows().length === 0 && DEV_URL) {
-    createWindow();
-    openApp(DEV_URL);
-  }
+  if (!win && BrowserWindow.getAllWindows().length === 0 && appUrl) showApp();
 });
 app.on("before-quit", stopServer);
 app.on("will-quit", stopServer);

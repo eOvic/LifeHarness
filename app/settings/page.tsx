@@ -4,16 +4,17 @@ import { useEffect, useState } from "react";
 import { useAppearance } from "@/components/appearance";
 import Connections from "@/components/Connections";
 import PageHeader from "@/components/PageHeader";
-import { Button, cx, Label, LinkButton, Spinner } from "@/components/ui";
+import { Button, cx, Label, LinkButton, Spinner, Switch } from "@/components/ui";
 import { getJson, postJson } from "@/lib/api";
 import { desktop } from "@/lib/desktop";
 import type { ModelInfo } from "@/src/server/llm";
 import { PRAYER_METHODS } from "@/src/core/prayer";
+import { BEFORE_OPTIONS, reminderSettings, type ReminderSettings } from "@/src/core/reminders";
 import { THEMES } from "@/src/core/themes";
 import { DAYS, type Profile } from "@/src/core/types";
 
 type Info = {
-  settings: { model?: string; reasoning?: string };
+  settings: { model?: string; reasoning?: string; reminders?: Partial<ReminderSettings>; background?: boolean; atLogin?: boolean };
   models: ModelInfo[];
   current: ModelInfo | null;
   dataDir: string;
@@ -51,6 +52,15 @@ export default function SettingsPage() {
     flash("Saved");
     load();
   };
+  // Reminders and the background/login switches: the desktop shell re-reads them at once.
+  const saveShell = async (patch: object) => {
+    await saveSettings(patch);
+    desktop()?.refreshShell?.();
+  };
+  const [shell, setShell] = useState<{ atLoginSupported: boolean } | null>(null);
+  useEffect(() => {
+    desktop()?.shellInfo?.().then(setShell).catch(() => {});
+  }, []);
   const patchProfile = async (patch: object) => {
     const r = await postJson<{ message: string; profile: Profile }>("/api/profile", patch);
     setProfile(r.profile);
@@ -216,6 +226,8 @@ export default function SettingsPage() {
             </section>
           )}
 
+          {info && <Reminders info={info} faith={!!profile?.faith?.enabled} atLoginSupported={!!shell?.atLoginSupported} save={saveShell} />}
+
           {info && (
             <section>
               <Label>Data &amp; privacy</Label>
@@ -261,6 +273,67 @@ export default function SettingsPage() {
 
 /** The public source code (package.json "homepage", via next.config.ts). */
 const SOURCE_URL = process.env.LIFEHARNESS_SOURCE_URL;
+
+/** Evening check-in times offered: every half hour from 17:00 to 23:30. */
+const EVENING_TIMES = Array.from({ length: 14 }, (_, i) => `${String(17 + Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
+
+function Reminders({ info, faith, atLoginSupported, save }: { info: Info; faith: boolean; atLoginSupported: boolean; save: (patch: object) => void }) {
+  const r = reminderSettings(info.settings.reminders);
+  const set = (patch: Partial<ReminderSettings>) => save({ reminders: patch });
+  const d = desktop();
+  return (
+    <section data-lh="reminders">
+      <Label>Reminders</Label>
+      <div className="mt-3 space-y-3 text-[14px] leading-relaxed">
+        <p className="text-muted">
+          {d
+            ? "Notifications on this computer while LifeHarness runs. Blocks you've already marked are skipped."
+            : "Reminders come from the desktop app; these settings apply there."}
+        </p>
+        <Row label="Blocks">
+          <Switch on={r.blocks} onChange={(v) => set({ blocks: v })} label="Remind me when a block starts" data-lh="reminders-blocks" />
+          <select value={r.before} disabled={!r.blocks} onChange={(e) => set({ before: Number(e.target.value) })} className={field} aria-label="When">
+            {BEFORE_OPTIONS.map((m) => (
+              <option key={m} value={m}>
+                {m ? `${m} min before it starts` : "when it starts"}
+              </option>
+            ))}
+          </select>
+        </Row>
+        {faith && (
+          <Row label="Prayers">
+            <Switch on={r.prayers} onChange={(v) => set({ prayers: v })} label="Remind me at prayer times" />
+            <span className="text-muted">at each prayer time</span>
+          </Row>
+        )}
+        <Row label="Evening">
+          <Switch on={r.evening} onChange={(v) => set({ evening: v })} label="Evening check-in" data-lh="reminders-evening" />
+          {/* A list, not <input type="time">: that shows 12-hour times on many systems; LifeHarness uses 24-hour. */}
+          <select value={r.eveningAt} disabled={!r.evening} onChange={(e) => set({ eveningAt: e.target.value })} className={field} aria-label="Evening check-in time" data-lh="reminders-evening-at">
+            {[...new Set([...EVENING_TIMES, r.eveningAt])].sort().map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          <span className="text-muted">if some of the day&apos;s blocks aren&apos;t marked</span>
+        </Row>
+        {d && (
+          <>
+            <Row label="Background">
+              <Switch on={info.settings.background !== false} onChange={(v) => save({ background: v })} label="Keep running in the background" />
+              <span className="text-muted">closing the window keeps reminders coming (tray icon)</span>
+            </Row>
+            <Row label="At login">
+              <Switch on={!!info.settings.atLogin} disabled={!atLoginSupported} onChange={(v) => save({ atLogin: v })} label="Start when I log in" />
+              <span className="text-muted">{atLoginSupported ? "start in the background when you log in" : "available in the installed app"}</span>
+            </Row>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (

@@ -31,6 +31,24 @@ export function Button({ variant = "secondary", size = "md", className, ...p }: 
   );
 }
 
+/** An on/off switch (the same look as the prayer-times toggle). */
+export function Switch({ on, onChange, label, disabled, ...p }: { on: boolean; onChange: (on: boolean) => void; label: string; disabled?: boolean } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onChange">) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!on)}
+      {...p}
+      className={cx("relative h-6 w-11 shrink-0 rounded-full border transition disabled:opacity-40", on ? "border-accent bg-accent" : "border-line bg-panel")}
+    >
+      <span className={cx("absolute top-0.5 h-[18px] w-[18px] rounded-full transition-all", on ? "left-[22px] bg-accent-ink" : "left-0.5 bg-muted")} />
+    </button>
+  );
+}
+
 /** A link that looks like a Button. In the desktop app, links to other sites open in the browser. */
 export function LinkButton({ variant = "secondary", size = "md", className, ...p }: AnchorHTMLAttributes<HTMLAnchorElement> & { variant?: Variant; size?: Size }) {
   return <a {...p} className={cx("inline-flex shrink-0 select-none items-center justify-center rounded-lg font-medium transition", VARIANT[variant], SIZE[size], className)} />;

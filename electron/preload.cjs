@@ -9,4 +9,8 @@ contextBridge.exposeInMainWorld("lifeharness", {
   setChrome: (c) => ipcRenderer.send("lh:set-chrome", { background: String(c.background), symbol: String(c.symbol) }),
   /** Open one of the app's own folders: "data" | "config" | "logs" (nothing else). */
   openFolder: (which) => ipcRenderer.send("lh:open-folder", String(which)),
+  /** Re-read reminders, background and login settings now. */
+  refreshShell: () => ipcRenderer.send("lh:refresh-shell"),
+  /** { atLoginSupported } */
+  shellInfo: () => ipcRenderer.invoke("lh:shell-info"),
 });
