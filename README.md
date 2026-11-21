@@ -2,11 +2,23 @@
 
 **A coach that turns what you want from life into a week you can actually live.**
 
+[![Latest version](https://img.shields.io/github/v/release/eOvic/LifeHarness?label=version&color=e2b24a)](https://github.com/eOvic/LifeHarness/releases/latest)
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![Windows, macOS, Linux](https://img.shields.io/badge/desktop-Windows%20%7C%20macOS%20%7C%20Linux-555)](#download)
+
+<p>
+  <a href="https://github.com/eOvic/LifeHarness/releases/latest/download/LifeHarness-x64-setup.exe"><img src="docs/assets/download-windows.svg" alt="Download for Windows" height="52"></a>
+  <a href="https://github.com/eOvic/LifeHarness/releases/latest/download/LifeHarness-arm64.dmg"><img src="docs/assets/download-macos.svg" alt="Download for macOS (Apple silicon)" height="52"></a>
+  <a href="https://github.com/eOvic/LifeHarness/releases/latest/download/lifeharness_amd64.deb"><img src="docs/assets/download-linux.svg" alt="Download for Linux (.deb)" height="52"></a>
+</p>
+
+Intel Mac, AppImage and other options: [all downloads](#download).
+
 LifeHarness interviews you, one question at a time, about what matters to you, your goals and how your days really go. Then it builds a realistic weekly plan around your sleep, your work or classes, your energy and, if you want, your prayer times. Each day you tick off what you did; each week it reviews what held and adjusts the plan.
 
 It runs on your own computer. Your plans and history stay there; only the conversation goes to the AI provider you choose.
 
-![The week view](docs/assets/desktop-week.png)
+![A tour: the interview, the plan, Today and the week](docs/assets/tour.gif)
 
 ## Download
 
@@ -60,7 +72,7 @@ Older versions and release notes are on the [Releases page](https://github.com/e
 - [docs/DESIGN.md](docs/DESIGN.md): the design system.
 - [docs/ROADMAP.md](docs/ROADMAP.md): what's next.
 
-Found a bug or have an idea? Open an [issue](https://github.com/eOvic/LifeHarness/issues).
+**Questions and ideas:** [Discussions](https://github.com/eOvic/LifeHarness/discussions). **Bugs:** [open an issue](https://github.com/eOvic/LifeHarness/issues/new/choose). **Want to help?** See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

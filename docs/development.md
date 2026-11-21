@@ -66,6 +66,7 @@ npm run desktop:build -- --mac   # off a Mac: the app folders only, to check the
   - set `CSC_LINK` (your "Developer ID Application" `.p12`, as a path or base64) and `CSC_KEY_PASSWORD`;
   - for notarization, set `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`;
   - in GitHub Actions, these come from the repository secrets `MAC_CERTIFICATE`, `MAC_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID` (see the workflow). Empty values are ignored.
+- **The README tour** (`docs/assets/tour.gif`) is made from the README screenshots: run `python3 scripts/readme-gif.py` after they change.
 - **The icons.** After changing `build/icon.svg`, run `npx tsx scripts/mac-icons.ts`. It renders `build/icon-mac.png` (Apple's icon grid) and the menu bar's template icons, `electron/trayTemplate*.png`.
 
 The macOS behaviour is also tested on every OS:
