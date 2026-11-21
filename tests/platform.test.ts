@@ -1,16 +1,18 @@
-// Windows behaviour, tested on any OS: LIFEHARNESS_PLATFORM=win32 makes src/server/platform.ts report
-// Windows. Covers what a Windows PC turned up: finding Claude Code, saving while another program holds a
-// file, and a window restored off-screen.
+// Windows and macOS behaviour, tested on any OS: LIFEHARNESS_PLATFORM=win32 or darwin makes
+// src/server/platform.ts report that OS. Covers what a Windows PC turned up (finding Claude Code, saving
+// while another program holds a file, a window restored off-screen) and what a Mac needs (Claude Code
+// for an app opened from the Dock, where settings live).
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { findClaude } from "@/src/server/claude-code";
+import { configDir } from "@/src/server/config-dir";
 import { makeRunDir, runsRoot, sweepClaudeRuns } from "@/src/server/claude-runs";
 import { replaceFile } from "@/src/server/store";
 
-const ENV_KEYS = ["PATH", "HOME", "APPDATA", "LOCALAPPDATA", "USER", "npm_config_prefix", "LIFEHARNESS_CLAUDE_BIN", "LIFEHARNESS_PLATFORM"];
+const ENV_KEYS = ["PATH", "HOME", "APPDATA", "LOCALAPPDATA", "USER", "XDG_CONFIG_HOME", "npm_config_prefix", "LIFEHARNESS_CLAUDE_BIN", "LIFEHARNESS_CONFIG_DIR", "LIFEHARNESS_PLATFORM"];
 let saved: Record<string, string | undefined> = {};
 let root = "";
 beforeEach(() => {
@@ -94,8 +96,39 @@ describe("finding Claude Code", () => {
     put("bin/claude.cmd", npmShim("x\\claude.exe"));
     process.env.PATH = path.join(root, "bin");
     expect(findClaude()).toBeUndefined();
-    const bin = put("bin/claude", "#!/bin/sh");
+    const bin = put("bin/claude", "\x7fELF"); // a native program (Anthropic's installer): run as it is
     expect(findClaude()).toEqual({ file: bin, pre: [] });
+  });
+
+  it("macOS: npm's Claude Code is a Node script; opened from the Dock, its own folder (with Node) and Homebrew's come first on PATH", () => {
+    process.env.LIFEHARNESS_PLATFORM = "darwin";
+    process.env.PATH = "/usr/bin:/bin:/usr/sbin:/sbin"; // what an app opened from the Dock or Finder gets
+    const script = put("home/.local/bin/claude", "#!/usr/bin/env node\nrequire('./cli.js')");
+    expect(findClaude()).toEqual({
+      file: script,
+      pre: [],
+      env: { PATH: [path.dirname(script), "/usr/bin", "/bin", "/usr/sbin", "/sbin", "/opt/homebrew/bin", "/usr/local/bin"].join(":") },
+    });
+  });
+
+  it("Linux: a script gets its own folder first on PATH, and nothing Mac-specific", () => {
+    process.env.LIFEHARNESS_PLATFORM = "linux";
+    const script = put("bin/claude", "#!/bin/sh");
+    process.env.PATH = [path.join(root, "bin"), "/usr/bin"].join(":");
+    expect(findClaude()).toEqual({ file: script, pre: [], env: { PATH: [path.join(root, "bin"), "/usr/bin"].join(":") } });
+  });
+});
+
+describe("where LifeHarness keeps its settings and sign-ins", () => {
+  it("macOS: ~/Library/Application Support/LifeHarness, where Electron puts the app's own files", () => {
+    process.env.LIFEHARNESS_PLATFORM = "darwin";
+    expect(configDir()).toBe(path.join(root, "home", "Library", "Application Support", "LifeHarness"));
+  });
+  it("Linux: ~/.config/LifeHarness, or under XDG_CONFIG_HOME", () => {
+    process.env.LIFEHARNESS_PLATFORM = "linux";
+    expect(configDir()).toBe(path.join(root, "home", ".config", "LifeHarness"));
+    process.env.XDG_CONFIG_HOME = path.join(root, "xdg");
+    expect(configDir()).toBe(path.join(root, "xdg", "LifeHarness"));
   });
 });
 

@@ -44,7 +44,7 @@ import {
 } from "@earendil-works/pi-ai";
 import { BRIDGE_NAME, createToolBridge, MCP_PREFIX, type BridgeCall, type ToolBridge } from "./claude-code-bridge";
 import { makeRunDir } from "./claude-runs";
-import { isWindows } from "./platform";
+import { isMac, isWindows } from "./platform";
 import { LIVE_CONTEXT_MARKER } from "./prompts";
 
 export const CLAUDE_CODE = "claude-code"; // provider id
@@ -115,13 +115,34 @@ export function findClaude(): ClaudeCommand | undefined {
     try {
       fs.accessSync(/*turbopackIgnore: true*/ c, fs.constants.X_OK);
       if (!fs.statSync(/*turbopackIgnore: true*/ c).isFile()) continue;
-      const cmd = win && /\.(cmd|bat)$/i.test(c) ? resolveShim(c) : { file: c, pre: [] };
+      const cmd = win ? (/\.(cmd|bat)$/i.test(c) ? resolveShim(c) : { file: c, pre: [] }) : withInterpreter(c);
       if (cmd) return cmd;
     } catch {
       /* not here */
     }
   }
   return undefined;
+}
+
+/** Claude Code installed with npm is a script (`#!/usr/bin/env node`), and its interpreter must be on PATH.
+ *  An app opened from the Dock or Finder gets only /usr/bin:/bin:/usr/sbin:/sbin, so the script's own folder
+ *  (where npm put Node too, with Homebrew or nvm) goes first, and on a Mac Homebrew's and /usr/local's bin
+ *  last. Anthropic's installer puts a native program there instead: that needs nothing. */
+function withInterpreter(file: string): ClaudeCommand {
+  const head = Buffer.alloc(2);
+  try {
+    const fd = fs.openSync(/*turbopackIgnore: true*/ file, "r");
+    try {
+      fs.readSync(fd, head, 0, 2, 0);
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    /* unreadable: run it as it is */
+  }
+  if (head.toString("latin1") !== "#!") return { file, pre: [] };
+  const dirs = [path.dirname(file), ...pathDirs(), ...(isMac() ? ["/opt/homebrew/bin", "/usr/local/bin"] : [])];
+  return { file, pre: [], env: { PATH: [...new Set(dirs)].join(path.delimiter) } };
 }
 
 /** npm, pnpm and yarn shims (cmd-shim) end in `"%dp0%\<target>" %*`: run that target directly. Going
