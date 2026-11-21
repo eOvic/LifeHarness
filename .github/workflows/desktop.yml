@@ -32,7 +32,7 @@ jobs:
           - { name: macOS, os: macos-latest }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Tests and builds never touch real data or credentials: scratch folders in the runner's temp.
       # (A job's env can't use the runner context, so every later step gets them from here.)
@@ -42,7 +42,7 @@ jobs:
           echo "LIFEHARNESS_DATA_DIR=$RUNNER_TEMP/lh-data" >> "$GITHUB_ENV"
           echo "LIFEHARNESS_AUTH_FILE=$RUNNER_TEMP/lh-auth/auth.json" >> "$GITHUB_ENV"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -80,7 +80,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: LifeHarness-${{ matrix.name }}
           path: |
@@ -99,7 +99,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: installers
           merge-multiple: true
