@@ -25,6 +25,23 @@ win:
 nsis:
   oneClick: true
   perMachine: false
+# macOS: a disk image per chip, built on a Mac (GitHub's macOS runner: .github/workflows/desktop.yml).
+# Without an Apple Developer ID it's signed ad hoc (desktop-build.mjs), and macOS asks once: System Settings
+# → Privacy & Security → Open Anyway. With a Developer ID certificate (CSC_LINK) and Apple's notary
+# credentials (APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID) it's signed and notarized: no warning.
+# Hardened runtime is on (electron-builder's default), with its default Electron entitlements.
+mac:
+  icon: build/icon-mac.png   # 1024 px on Apple's icon grid (scripts/mac-icons.ts); electron-builder makes the .icns
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch: [arm64, x64]     # arm64: Apple silicon (M1 and later); x64: Intel
+  artifactName: "${productName}-${version}-${arch}.${ext}"
+  minimumSystemVersion: "13.0"   # Electron 44+ needs macOS 13 (Ventura)
+  # The server's fonts, images and WebAssembly are sealed by the app's signature like any resource; only
+  # code (.node add-ons) is signed file by file.
+  signIgnore:
+    - "/Contents/Resources/server/.+\\.(woff2?|ttf|otf|eot|png|jpe?g|gif|ico|webp|avif|svg|wasm|so|br|gz|map)$"
 linux:
   target: [deb, AppImage]
   category: Office

@@ -1,5 +1,5 @@
 // Privacy gate: nothing that identifies the person who built it may ship.
-//   node scripts/privacy-check.mjs [dir ...]     (default: this OS's dist-desktop/<os>-unpacked/resources)
+//   node scripts/privacy-check.mjs [dir ...]     (default: this OS's app resources in dist-desktop/)
 // Looks for the builder's home path, user name, and every git email configured here (repo + global).
 // Set LIFEHARNESS_MAINTAINER="Name <email>" to publish under an address on purpose (it's then allowed).
 import { execSync } from "node:child_process";
@@ -24,7 +24,11 @@ const needles = [...new Set([...pathForms(os.homedir()), user.length >= 5 ? user
   (n) => n && n.length > 4 && !allowed.includes(n),
 );
 
-const dirs = process.argv.slice(2).length ? process.argv.slice(2) : [`dist-desktop/${process.platform === "win32" ? "win" : "linux"}-unpacked/resources`];
+const ownResources = {
+  win32: "dist-desktop/win-unpacked/resources",
+  darwin: `dist-desktop/mac${process.arch === "arm64" ? "-arm64" : ""}/LifeHarness.app/Contents/Resources`,
+}[process.platform] ?? "dist-desktop/linux-unpacked/resources";
+const dirs = process.argv.slice(2).length ? process.argv.slice(2) : [ownResources];
 const leaks = [];
 const scan = (dir) => {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

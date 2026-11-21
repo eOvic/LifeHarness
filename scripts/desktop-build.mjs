@@ -1,8 +1,12 @@
 // Build the desktop app: Next standalone server + Electron shell -> installers in dist-desktop/.
-//   npm run desktop:build            on Linux: .deb + AppImage; on Windows: a setup .exe (NSIS)
+//   npm run desktop:build            on Linux: .deb + AppImage; on Windows: a setup .exe (NSIS);
+//                                    on macOS: a .dmg for Apple silicon (arm64) and one for Intel (x64)
 //   npm run desktop:build -- --dir   unpacked only, fastest; for testing
 //   npm run desktop:build -- --win   on Linux: a portable Windows .zip for testing (the setup .exe needs
 //                                    Windows: build it there, or with .github/workflows/desktop.yml)
+//   npm run desktop:build -- --mac   off a Mac: the macOS app folders only, to check what they contain.
+//                                    Nothing can be signed off a Mac, so they won't open on one: the
+//                                    .dmg needs a Mac (or .github/workflows/desktop.yml).
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -12,14 +16,23 @@ const root = process.cwd();
 const run = (cmd, env = {}) => execSync(cmd, { stdio: "inherit", env: { ...process.env, ...env } });
 const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 // Each OS builds its own installers: Next traces native pieces for the machine it runs on.
-const targetOs = process.argv.includes("--win") ? "win32" : process.platform;
-const TARGET = { linux: { flag: "--linux", unpacked: "linux-unpacked" }, win32: { flag: "--win", unpacked: "win-unpacked" } }[targetOs];
+const targetOs = process.argv.includes("--win") ? "win32" : process.argv.includes("--mac") ? "darwin" : process.platform;
+// unpacked: the app folders electron-builder leaves (macOS: one per chip). own: this target's installers.
+const TARGET = {
+  linux: { flag: "--linux", unpacked: ["linux-unpacked"], own: /(\.deb|\.AppImage)$/ },
+  win32: { flag: "--win", unpacked: ["win-unpacked"], own: /(-setup\.exe|-setup\.exe\.blockmap|-test\.zip|\.nsis\.7z)$/ },
+  darwin: { flag: "--mac", unpacked: ["mac-arm64", "mac", "mac-universal"], own: /(\.dmg|\.dmg\.blockmap)$/ },
+}[targetOs];
 if (!TARGET) {
-  console.error(`✗ desktop builds run on Linux or Windows (this is ${process.platform})`);
+  console.error(`✗ desktop builds are for Linux, Windows or macOS (this is ${process.platform})`);
   process.exit(1);
 }
 const crossWin = targetOs === "win32" && process.platform !== "win32";
 if (crossWin) console.log("⚠ Windows build from Linux: a portable .zip for testing (the setup .exe needs Windows)");
+const crossMac = targetOs === "darwin" && process.platform !== "darwin";
+if (crossMac) console.log("⚠ macOS build off a Mac: the app folders only, to check their contents (unsigned: they won't open on a Mac)");
+/** process.resourcesPath of a built app folder: where the server, licenses and guard go. */
+const resourcesOf = (dir) => (targetOs === "darwin" ? path.join("dist-desktop", dir, "LifeHarness.app", "Contents", "Resources") : path.join("dist-desktop", dir, "resources"));
 
 const skipNext = process.argv.includes("--skip-next");
 console.log(`1/4 next build (standalone)${skipNext ? ": skipped" : ""}`);
@@ -110,7 +123,8 @@ console.log("3/4 stage the Electron app");
 const app = path.join(root, "desktop-app");
 fs.rmSync(app, { recursive: true, force: true });
 fs.mkdirSync(app);
-for (const f of ["main.cjs", "preload.cjs", "window-state.cjs", "icon.png"]) fs.copyFileSync(path.join("electron", f), path.join(app, f));
+for (const f of ["main.cjs", "preload.cjs", "window-state.cjs", "login-item.cjs", "icon.png", "trayTemplate.png", "trayTemplate@2x.png"])
+  fs.copyFileSync(path.join("electron", f), path.join(app, f));
 // The package names a neutral maintainer, never the builder's git identity (it ends up in the
 // .deb control file and inside the app). Publishing? Set LIFEHARNESS_MAINTAINER="Name <email>".
 const maintainer = /^(.+?)\s*<([^>]+)>$/.exec(process.env.LIFEHARNESS_MAINTAINER ?? "") ?? [null, "LifeHarness", "maintainer@lifeharness.invalid"];
@@ -134,32 +148,60 @@ fs.writeFileSync(
 );
 
 console.log("4/4 electron-builder");
-const extra = process.argv.includes("--dir") ? " --dir" : "";
-// Clear this target's previous output only, so a Linux and a Windows build can sit side by side.
-const ownOutput = targetOs === "win32" ? /(-setup\.exe|-test\.zip|\.blockmap|\.nsis\.7z)$/ : /(\.deb|\.AppImage)$/;
+const extra = process.argv.includes("--dir") || crossMac ? " --dir" : "";
+// Clear this target's previous output only, so builds for different OSes can sit side by side.
 for (const e of fs.existsSync("dist-desktop") ? fs.readdirSync("dist-desktop") : [])
-  if (e === TARGET.unpacked || ownOutput.test(e) || e.startsWith("builder-") || e.startsWith(".")) fs.rmSync(path.join("dist-desktop", e), { recursive: true, force: true });
+  if (TARGET.unpacked.includes(e) || TARGET.own.test(e) || e.startsWith("builder-") || e.startsWith(".")) fs.rmSync(path.join("dist-desktop", e), { recursive: true, force: true });
 // The .exe's icon and version info are written on every OS (electron-builder 26 edits them in plain
 // JavaScript, no Wine). Only the NSIS installer needs Windows, so a build from Linux zips the app instead.
 const testZip = " zip -c.win.artifactName='${productName}-${version}-${arch}-test.${ext}'";
-run(`npx electron-builder ${TARGET.flag}${crossWin && !extra ? testZip : ""} --publish never${extra}`);
-const res = path.join("dist-desktop", TARGET.unpacked, "resources");
-// Check what actually got packaged (the afterPack copy), not just the staging folder.
-run(`node scripts/verify-server.mjs ${path.join(res, "server")}`);
-// Licenses: our LICENSE and the third-party notices ship (scripts/after-pack.cjs); sharp stays out.
-if (fs.existsSync(path.join(res, "server", ".next", "node_modules"))) {
-  console.error("✗ engine aliases (.next/node_modules) were shipped: they're symlinks, which break on Windows");
+// Signing variables come from CI secrets, and an unset secret arrives as "": electron-builder would take
+// that for a certificate. Drop them.
+for (const k of ["CSC_LINK", "CSC_KEY_PASSWORD", "CSC_NAME", "APPLE_ID", "APPLE_APP_SPECIFIC_PASSWORD", "APPLE_TEAM_ID", "APPLE_API_KEY", "APPLE_API_KEY_ID", "APPLE_API_ISSUER"])
+  if (process.env[k] === "") delete process.env[k];
+// macOS: a Mac with Apple silicon runs only signed code. Without a Developer ID certificate the app is
+// signed ad hoc ("-"): it opens after one "Open Anyway" in System Settings. With CSC_LINK (and APPLE_*
+// for notarization) electron-builder signs with the Developer ID and has Apple notarize it instead.
+const adHoc = targetOs === "darwin" && !crossMac && !process.env.CSC_LINK && !process.env.CSC_NAME;
+if (adHoc) console.log("  macOS: no Developer ID certificate (CSC_LINK): signing ad hoc");
+const arches = crossMac ? " --arm64 --x64" : ""; // on a Mac the .dmg list in electron-builder.yml decides
+run(`npx electron-builder ${TARGET.flag}${crossWin && !extra ? testZip : ""}${adHoc ? " -c.mac.identity=-" : ""}${arches} --publish never${extra}`);
+
+// Check what actually got packaged (the afterPack copy), not just the staging folder: every app folder.
+const built = TARGET.unpacked.filter((d) => fs.existsSync(path.join("dist-desktop", d)));
+if (!built.length) {
+  console.error(`✗ electron-builder left no app folder (${TARGET.unpacked.join(", ")})`);
   process.exit(1);
 }
-const problems = [
-  ...["licenses/LICENSE", "licenses/THIRD_PARTY_NOTICES.txt"].filter((f) => !fs.existsSync(path.join(res, f))).map((f) => `${f} is missing`),
-  ...["sharp", "@img"].filter((n) => fs.existsSync(path.join(res, "server/node_modules", n))).map((n) => `${n} was shipped`),
-];
-if (problems.length) {
-  console.error(`✗ licenses: ${problems.join("; ")}`);
-  process.exit(1);
+const prebuildsFor = (dir, found = []) => {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true }))
+    if (e.isDirectory()) e.name === "prebuilds" ? found.push(...fs.readdirSync(path.join(dir, e.name))) : prebuildsFor(path.join(dir, e.name), found);
+  return found;
+};
+for (const dir of built) {
+  const res = resourcesOf(dir);
+  console.log(`checking ${dir}`);
+  run(`node scripts/verify-server.mjs ${path.join(res, "server")} --os ${targetOs}`);
+  if (fs.existsSync(path.join(res, "server", ".next", "node_modules"))) {
+    console.error("✗ engine aliases (.next/node_modules) were shipped: they're symlinks, which break on Windows");
+    process.exit(1);
+  }
+  // Licenses: our LICENSE and the third-party notices ship (scripts/after-pack.cjs); sharp stays out.
+  // Native add-ons: this OS's only. macOS: the server's Dock guard is in place.
+  const problems = [
+    ...["licenses/LICENSE", "licenses/THIRD_PARTY_NOTICES.txt"].filter((f) => !fs.existsSync(path.join(res, f))).map((f) => `${f} is missing`),
+    ...["sharp", "@img"].filter((n) => fs.existsSync(path.join(res, "server/node_modules", n))).map((n) => `${n} was shipped`),
+    ...prebuildsFor(path.join(res, "server", "node_modules"))
+      .filter((t) => !t.startsWith(`${targetOs}-`))
+      .map((t) => `a native add-on for another OS was shipped (${t})`),
+    ...(targetOs === "darwin" && !fs.existsSync(path.join(res, "server-title-guard.cjs")) ? ["server-title-guard.cjs is missing (a second Dock icon)"] : []),
+  ];
+  if (problems.length) {
+    console.error(`✗ package: ${problems.join("; ")}`);
+    process.exit(1);
+  }
+  console.log("✓ package: LICENSE and third-party notices shipped; sharp left out; native add-ons for this OS only");
+  // Privacy gate: nothing that identifies the builder may ship (home path, user name, git emails).
+  run(`node scripts/privacy-check.mjs ${res}`);
 }
-console.log("✓ licenses: LICENSE and third-party notices shipped; sharp left out");
-// Privacy gate: nothing that identifies the builder may ship (home path, user name, git emails).
-run(`node scripts/privacy-check.mjs ${res}`);
 console.log("\ndone: dist-desktop/");
