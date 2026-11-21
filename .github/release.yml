@@ -1,0 +1,14 @@
+# Groups GitHub's auto-generated release notes by the labels of merged pull requests.
+# (Changes pushed straight to main have no pull request: write those in the release summary.)
+changelog:
+  exclude:
+    labels: [skip-changelog]
+  categories:
+    - title: New
+      labels: [enhancement, feature]
+    - title: Fixes
+      labels: [bug]
+    - title: Documentation
+      labels: [documentation]
+    - title: Other changes
+      labels: ["*"]

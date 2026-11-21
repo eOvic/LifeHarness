@@ -1,0 +1,61 @@
+name: Bug report
+description: Something doesn't work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Please **leave out personal details**: your plans, goals and conversations stay on your computer, so don't paste them here.
+  - type: dropdown
+    id: system
+    attributes:
+      label: System
+      options:
+        - Windows
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Linux (.deb)
+        - Linux (AppImage)
+        - Browser mode (npm run dev)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: LifeHarness version
+      description: Settings → About shows it.
+      placeholder: "0.6.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: model
+    attributes:
+      label: AI model connection (if it's related)
+      options:
+        - Not related
+        - Claude through Claude Code
+        - ChatGPT
+        - GitHub Copilot
+        - Grok
+        - API key
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead. A screenshot helps.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to make it happen again
+      placeholder: |
+        1. Open Settings → Reminders
+        2. Click "Send a test reminder"
+        3. …
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log lines (optional)
+      description: File → Open logs folder. The logs hold event kinds and counts, not your plans.
+      render: text

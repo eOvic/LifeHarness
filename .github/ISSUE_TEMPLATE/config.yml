@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/eOvic/LifeHarness/discussions
+    about: Ask how something works, share how you use LifeHarness, or discuss an idea.
+  - name: User guide
+    url: https://github.com/eOvic/LifeHarness/blob/main/DOCUMENTATION.md
+    about: Installing, connecting an AI model, daily use, troubleshooting.
+  - name: Report a security problem privately
+    url: https://github.com/eOvic/LifeHarness/security/advisories/new
+    about: Please don't post security problems in public issues.
