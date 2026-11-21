@@ -41,8 +41,8 @@ LIFEHARNESS_DATA_DIR=$(mktemp -d) LIFEHARNESS_AUTH_FILE=$(mktemp -d)/auth.json n
 ## Build the desktop app
 
 ```bash
-npm run desktop:build            # in dist-desktop/. Linux: .deb + AppImage; Windows: LifeHarness-<v>-x64-setup.exe;
-                                 #   macOS: LifeHarness-<v>-arm64.dmg (Apple silicon) + LifeHarness-<v>-x64.dmg (Intel)
+npm run desktop:build            # in dist-desktop/. Linux: lifeharness_amd64.deb + LifeHarness-x86_64.AppImage;
+                                 #   Windows: LifeHarness-x64-setup.exe; macOS: LifeHarness-arm64.dmg + LifeHarness-x64.dmg
 npm run desktop:build -- --dir   # unpacked only (faster): dist-desktop/linux-unpacked, win-unpacked, mac-arm64 or mac
 npm run desktop:build -- --win   # on Linux: a portable Windows .zip for testing (the setup .exe needs Windows)
 npm run desktop:build -- --mac   # off a Mac: the app folders only, to check their contents (unsigned: they can't open on a Mac)
@@ -52,6 +52,8 @@ npm run desktop:build -- --mac   # off a Mac: the app folders only, to check the
 - **Next traces native pieces for the machine it builds on.**
 - **Windows:** the installer (NSIS) can only be made on Windows. The `.exe`'s icon and version info are set on every OS. The installer is per-user (no administrator) and unsigned, so SmartScreen warns until it's code-signed.
 - **macOS:** the disk images and signing need a Mac. A Mac with Apple silicon builds both chips.
+
+**Installer names carry no version** (`electron-builder.yml`), so the README's download links (`releases/latest/download/<file>`) always point to the newest published release. Keep the names and those links in step.
 
 **Release builds without rebooting:** `.github/workflows/desktop.yml` builds each OS's installers on that OS, on GitHub's machines. While the repository is private, a macOS minute uses about 10 times the free allowance of a Linux minute.
 - **Start it by hand:** **Actions → Desktop builds → Run workflow**. The installers are attached to the run.

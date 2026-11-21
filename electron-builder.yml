@@ -14,6 +14,8 @@ files:
 # The self-contained Next.js server (.next/standalone, with its traced node_modules) is copied to
 # resources/server by this hook:
 afterPack: scripts/after-pack.cjs
+# Installer file names carry no version, so the README can link straight to the latest release's files
+# (github.com/eOvic/LifeHarness/releases/latest/download/<file>). The version is in the release itself.
 # Windows: a per-user installer (no administrator needed), built on Windows itself (npm run desktop:build).
 # Unsigned for now, like LearnHarness's: SmartScreen warns until the installer is code-signed.
 win:
@@ -21,7 +23,7 @@ win:
   target:
     - target: nsis
       arch: [x64]
-  artifactName: "${productName}-${version}-${arch}-setup.${ext}"
+  artifactName: "${productName}-${arch}-setup.${ext}"   # LifeHarness-x64-setup.exe
 nsis:
   oneClick: true
   perMachine: false
@@ -36,7 +38,7 @@ mac:
   target:
     - target: dmg
       arch: [arm64, x64]     # arm64: Apple silicon (M1 and later); x64: Intel
-  artifactName: "${productName}-${version}-${arch}.${ext}"
+  artifactName: "${productName}-${arch}.${ext}"   # LifeHarness-arm64.dmg, LifeHarness-x64.dmg
   minimumSystemVersion: "13.0"   # Electron 44+ needs macOS 13 (Ventura)
   # The server's fonts, images and WebAssembly are sealed by the app's signature like any resource; only
   # code (.node add-ons) is signed file by file.
@@ -50,3 +52,7 @@ linux:
   synopsis: From what you want in life to a week you can actually live.
   description: An AI coach that interviews you about your goals and constraints, plans your week around them, and keeps it honest with tracking and weekly reviews.
   syncDesktopName: true
+deb:
+  artifactName: "${name}_${arch}.${ext}"   # lifeharness_amd64.deb
+appImage:
+  artifactName: "${productName}-${arch}.${ext}"   # LifeHarness-x86_64.AppImage
