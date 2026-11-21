@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { AppearanceProvider } from "@/components/appearance";
 import Shell from "@/components/Shell";
 import { themeById, themeVars } from "@/src/core/themes";
+import { isMac } from "@/src/server/platform";
 import { getSettings } from "@/src/server/store";
 import "./globals.css";
 
@@ -22,16 +23,20 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // The theme is per-machine state: render it on the server so the first frame is already right.
   await connection();
   const theme = themeById(getSettings().theme);
+  // The server only listens on this computer, so its OS is the person's: ⌘ shortcuts on a Mac, and in
+  // the desktop app room for the window's traffic lights from the first frame (globals.css).
+  const mac = isMac();
   return (
     <html
       lang="en"
+      data-chrome={mac && process.env.LIFEHARNESS_DESKTOP === "1" ? "mac" : undefined}
       className={`${theme.mode} ${mono.variable} ${sans.variable} ${serif.variable}`}
       style={themeVars(theme) as React.CSSProperties}
       suppressHydrationWarning
     >
       <body className="antialiased">
         <AppearanceProvider initialThemeId={theme.id}>
-          <Shell>{children}</Shell>
+          <Shell mac={mac}>{children}</Shell>
         </AppearanceProvider>
       </body>
     </html>

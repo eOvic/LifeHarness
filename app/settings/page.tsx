@@ -5,9 +5,10 @@ import { useAppearance } from "@/components/appearance";
 import Connections from "@/components/Connections";
 import GoogleCalendar from "@/components/GoogleCalendar";
 import PageHeader from "@/components/PageHeader";
+import { useShell } from "@/components/Shell";
 import { Button, cx, Label, LinkButton, Spinner, Switch } from "@/components/ui";
 import { getJson, postJson } from "@/lib/api";
-import { desktop } from "@/lib/desktop";
+import { desktop, type ShellInfo } from "@/lib/desktop";
 import type { ModelInfo } from "@/src/server/llm";
 import { PRAYER_METHODS } from "@/src/core/prayer";
 import { BEFORE_OPTIONS, reminderSettings, type ReminderSettings } from "@/src/core/reminders";
@@ -58,7 +59,7 @@ export default function SettingsPage() {
     await saveSettings(patch);
     desktop()?.refreshShell?.();
   };
-  const [shell, setShell] = useState<{ atLoginSupported: boolean } | null>(null);
+  const [shell, setShell] = useState<ShellInfo | null>(null);
   useEffect(() => {
     desktop()?.shellInfo?.().then(setShell).catch(() => {});
   }, []);
@@ -227,7 +228,7 @@ export default function SettingsPage() {
             </section>
           )}
 
-          {info && <Reminders info={info} faith={!!profile?.faith?.enabled} atLoginSupported={!!shell?.atLoginSupported} save={saveShell} />}
+          {info && <Reminders info={info} faith={!!profile?.faith?.enabled} shell={shell} save={saveShell} />}
 
           {info && <GoogleCalendar />}
 
@@ -280,10 +281,12 @@ const SOURCE_URL = process.env.LIFEHARNESS_SOURCE_URL;
 /** Evening check-in times offered: every half hour from 17:00 to 23:30. */
 const EVENING_TIMES = Array.from({ length: 14 }, (_, i) => `${String(17 + Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
 
-function Reminders({ info, faith, atLoginSupported, save }: { info: Info; faith: boolean; atLoginSupported: boolean; save: (patch: object) => void }) {
+function Reminders({ info, faith, shell, save }: { info: Info; faith: boolean; shell: ShellInfo | null; save: (patch: object) => void }) {
   const r = reminderSettings(info.settings.reminders);
   const set = (patch: Partial<ReminderSettings>) => save({ reminders: patch });
   const d = desktop();
+  const { mac } = useShell();
+  const atLoginSupported = !!shell?.atLoginSupported;
   return (
     <section data-lh="reminders">
       <Label>Reminders</Label>
@@ -325,16 +328,64 @@ function Reminders({ info, faith, atLoginSupported, save }: { info: Info; faith:
           <>
             <Row label="Background">
               <Switch on={info.settings.background !== false} onChange={(v) => save({ background: v })} label="Keep running in the background" />
-              <span className="text-muted">closing the window keeps reminders coming (tray icon)</span>
+              <span className="text-muted">closing the window keeps reminders coming ({mac ? "menu bar icon" : "tray icon"})</span>
             </Row>
             <Row label="At login">
               <Switch on={!!info.settings.atLogin} disabled={!atLoginSupported} onChange={(v) => save({ atLogin: v })} label="Start when I log in" />
-              <span className="text-muted">{atLoginSupported ? "start in the background when you log in" : "available in the installed app"}</span>
+              <span className="text-muted">{atLoginSupported ? "start in the background when you log in" : shell?.atLoginNote || "available in the installed app"}</span>
             </Row>
+            {d.testReminder && <TestReminder mac={mac} refusedBefore={shell?.notifications === "failed"} />}
           </>
         )}
       </div>
     </section>
+  );
+}
+
+/** Whether notifications reach the screen. macOS refuses them from an app it can't verify (one not signed
+ *  by Apple): then the calendar is the way to get reminders, and this says so. */
+function TestReminder({ mac, refusedBefore }: { mac: boolean; refusedBefore: boolean }) {
+  type Result = "shown" | "sent" | "failed" | "unsupported";
+  const [state, setState] = useState<Result | "idle" | "sending">(refusedBefore ? "failed" : "idle");
+  const [reason, setReason] = useState("");
+  useEffect(() => {
+    if (refusedBefore) setState((s) => (s === "idle" ? "failed" : s));
+  }, [refusedBefore]);
+  const test = async () => {
+    setState("sending");
+    try {
+      const r = await desktop()!.testReminder!();
+      setReason(r.error ?? "");
+      setState(r.result);
+    } catch {
+      setState("failed");
+    }
+  };
+  return (
+    <>
+      <Row label="Check">
+        <Button size="sm" onClick={test} disabled={state === "sending"} data-lh="test-reminder">
+          Send a test reminder
+        </Button>
+        {state === "shown" && <span className="text-muted">Sent: it should be on your screen now.</span>}
+        {state === "sent" && <span className="text-muted">Sent. Nothing on screen? Notifications for LifeHarness are off in your system settings.</span>}
+        {state === "unsupported" && <span className="text-warn">This system has no notifications LifeHarness can use.</span>}
+      </Row>
+      {/* Under the controls (the label column is w-28 + gap-4), so "Check" stays beside its button. */}
+      {state === "failed" && (
+        <p className="pl-32 text-[13px] text-warn" data-lh="notifications-refused">
+          {mac ? (
+            <>
+              macOS didn&apos;t show it. Allow LifeHarness in System Settings → Notifications. If LifeHarness isn&apos;t listed there, macOS won&apos;t
+              let this copy notify, because it isn&apos;t signed by Apple. Get your reminders from a calendar instead: connect Google Calendar below,
+              or open the Week page&apos;s Export .ics in Apple Calendar.
+            </>
+          ) : (
+            `The system refused the notification${reason ? `: ${reason}` : "."}`
+          )}
+        </p>
+      )}
+    </>
   );
 }
 

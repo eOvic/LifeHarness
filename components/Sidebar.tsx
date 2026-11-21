@@ -32,7 +32,7 @@ function status(c: ChatSummary): string {
   return c.kind === "review" ? "Weekly review" : c.phase === "intake" ? "Interview" : "Planning";
 }
 
-export default function Sidebar({ onToggle }: { onToggle: () => void }) {
+export default function Sidebar({ onToggle, mac }: { onToggle: () => void; mac: boolean }) {
   const path = usePathname();
   const [chats, setChats] = useState<ChatSummary[]>([]);
   useEffect(() => {
@@ -48,12 +48,12 @@ export default function Sidebar({ onToggle }: { onToggle: () => void }) {
 
   return (
     <aside className="flex h-dvh w-[272px] shrink-0 flex-col border-r border-line bg-canvas">
-      <div className="lh-drag flex h-[60px] shrink-0 items-center justify-between pl-4 pr-3">
+      <div className="lh-drag lh-traffic flex h-[60px] shrink-0 items-center justify-between pl-4 pr-3">
         <Link href="/" className="flex items-center gap-2.5 text-ink">
-          <LogoMark className="h-[26px] w-[26px]" />
+          <LogoMark className="lh-traffic-hide h-[26px] w-[26px]" />
           <span className="lh-title text-[19px]">LifeHarness</span>
         </Link>
-        <IconButton onClick={onToggle} title="Hide sidebar (Ctrl+B)">
+        <IconButton onClick={onToggle} title={`Hide sidebar (${mac ? "⌘B" : "Ctrl+B"})`}>
           <PanelLeftClose />
         </IconButton>
       </div>

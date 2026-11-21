@@ -1,16 +1,16 @@
 "use client";
 import { PanelLeftOpen } from "lucide-react";
 import type { ReactNode } from "react";
-import { useShell } from "./Shell";
-import { IconButton } from "./ui";
+import { shortcut, useShell } from "./Shell";
+import { cx, IconButton } from "./ui";
 
 /** The 60px band at the top of every page. In the desktop app it is also the window's title bar. */
 export default function PageHeader({ title, meta, right }: { title: ReactNode; meta?: ReactNode; right?: ReactNode }) {
-  const { sidebarOpen, toggleSidebar } = useShell();
+  const { sidebarOpen, toggleSidebar, mac } = useShell();
   return (
-    <header className="lh-drag lh-wco-pad @container flex h-[60px] shrink-0 items-center gap-3 border-b border-line pl-5">
+    <header className={cx("lh-drag lh-wco-pad @container flex h-[60px] shrink-0 items-center gap-3 border-b border-line pl-5", !sidebarOpen && "lh-traffic")}>
       {!sidebarOpen && (
-        <IconButton onClick={toggleSidebar} title="Show sidebar (Ctrl+B)" className="-ml-2">
+        <IconButton onClick={toggleSidebar} title={`Show sidebar (${shortcut(mac, "B")})`} className="-ml-2">
           <PanelLeftOpen />
         </IconButton>
       )}

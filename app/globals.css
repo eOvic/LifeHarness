@@ -246,6 +246,15 @@ body {
 .lh-wco-pad {
   padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px);
 }
+/* macOS: the window's own buttons (traffic lights) sit top-left instead (electron/main.cjs
+   trafficLightPosition 18,22: three 12px buttons, about 70px wide), over the leftmost band: the
+   sidebar's, or the page's while the sidebar is hidden. That band leaves them room; the logo makes way. */
+html[data-chrome="mac"] .lh-traffic {
+  padding-left: 88px;
+}
+html[data-chrome="mac"] .lh-traffic .lh-traffic-hide {
+  display: none;
+}
 
 /* ---- motion ------------------------------------------------------------------------ */
 @keyframes lh-rise {
