@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld("lifeharness", {
   openFolder: (which) => ipcRenderer.send("lh:open-folder", String(which)),
   /** Re-read reminders, background and login settings now. */
   refreshShell: () => ipcRenderer.send("lh:refresh-shell"),
-  /** { atLoginSupported } */
+  /** { atLoginSupported, atLoginNote, notifications } */
   shellInfo: () => ipcRenderer.invoke("lh:shell-info"),
+  /** Show a test notification: { result: "shown" | "sent" | "failed" | "unsupported", error? } */
+  testReminder: () => ipcRenderer.invoke("lh:test-reminder"),
 });

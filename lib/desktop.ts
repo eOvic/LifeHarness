@@ -7,8 +7,18 @@ export interface DesktopBridge {
   openFolder?: (which: "data" | "config" | "logs" | "licenses") => void;
   /** Re-read reminders, background and login settings now (after saving them or adopting a plan). */
   refreshShell?: () => void;
-  /** What this shell can do: starting at login needs the installed app. */
-  shellInfo?: () => Promise<{ atLoginSupported: boolean }>;
+  /** What this shell can do: starting at login needs the installed app (on macOS, in Applications). */
+  shellInfo?: () => Promise<ShellInfo>;
+  /** Show a test notification (shells before 0.6 don't have it). */
+  testReminder?: () => Promise<{ result: "shown" | "sent" | "failed" | "unsupported"; error?: string }>;
+}
+
+export interface ShellInfo {
+  atLoginSupported: boolean;
+  /** Why starting at login isn't available, in a few words (older shells don't say). */
+  atLoginNote?: string;
+  /** "failed": the system refused a notification this run (on macOS: an app it can't verify). */
+  notifications?: "untested" | "shown" | "failed";
 }
 
 export function desktop(): DesktopBridge | undefined {

@@ -4,15 +4,18 @@
  *
  * Packaged: spawns the Next.js standalone server (resources/server/server.js) with Electron's own
  * Node (ELECTRON_RUN_AS_NODE) on a free 127.0.0.1 port, data in <userData>/data (~/.config/LifeHarness
- * on Linux, %APPDATA%\LifeHarness on Windows), then opens a frameless window on it.
+ * on Linux, %APPDATA%\LifeHarness on Windows, ~/Library/Application Support/LifeHarness on macOS),
+ * then opens a frameless window on it.
  * Dev: LIFEHARNESS_DEV_URL points at a running `next dev`.
  *
  * Window chrome: no OS title bar. The app's 60px header bands are the title bar (CSS
  * -webkit-app-region: drag); on Linux/Windows the native min/max/close buttons are drawn over
  * the top-right corner (titleBarOverlay) in the theme's colors, and the page leaves room for
- * them with env(titlebar-area-*).
+ * them with env(titlebar-area-*). On macOS the traffic lights sit top-left (trafficLightPosition)
+ * and the page leaves room for them there (html[data-chrome="mac"], app/globals.css).
  */
-const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, powerMonitor, screen, shell, session, Tray } = require("electron");
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, Notification, powerMonitor, screen, shell, session, Tray } = require("electron");
+const { LABEL: LOGIN_LABEL, autostartEntry, launchAgentPlist } = require("./login-item.cjs");
 const { fitToScreen } = require("./window-state.cjs");
 const { randomBytes } = require("node:crypto");
 const { spawn } = require("node:child_process");
@@ -147,7 +150,11 @@ async function startServer() {
   fs.mkdirSync(logDir(), { recursive: true });
   rotate(path.join(logDir(), "server.log"));
   const out = fs.openSync(path.join(logDir(), "server.log"), "a");
-  server = spawn(process.execPath, [serverJs], {
+  // macOS: keep Next's process title away from Launch Services, or a second icon appears in the Dock
+  // (server-title-guard.cjs, put beside the server by scripts/after-pack.cjs).
+  const guard = path.join(process.resourcesPath, "server-title-guard.cjs");
+  const args = isMac && fs.existsSync(guard) ? ["--require", guard, serverJs] : [serverJs];
+  server = spawn(process.execPath, args, {
     cwd: path.dirname(serverJs),
     env: {
       ...process.env,
@@ -284,6 +291,7 @@ function createWindow() {
   const state = loadState();
   const bounds = fitToScreen(state, screen); // never off-screen after a monitor or scaling change
   const chrome = chromeColors();
+  followTheme(chrome.color);
   win = new BrowserWindow({
     x: bounds.x,
     y: bounds.y,
@@ -387,10 +395,21 @@ function showApp(page = "") {
   if (appUrl) openApp(appUrl, page);
 }
 
+/** The tray icon; on macOS, the menu bar icon. macOS wants a "template" there: black and transparency, which
+ *  it tints for light and dark menu bars (trayTemplate.png, @2x for Retina; scripts/mac-icons.ts). */
+function trayImage() {
+  if (isMac) {
+    const img = nativeImage.createFromPath(path.join(__dirname, "trayTemplate.png"));
+    img.setTemplateImage(true);
+    return img;
+  }
+  return nativeImage.createFromPath(path.join(__dirname, "icon.png")).resize({ width: 24, height: 24 });
+}
+
 function updateTray() {
   const want = shellSettings().background;
   if (want && !tray) {
-    tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "icon.png")).resize({ width: 24, height: 24 }));
+    tray = new Tray(trayImage());
     tray.setToolTip(PRODUCT);
     tray.setContextMenu(
       Menu.buildFromTemplate([
@@ -400,14 +419,19 @@ function updateTray() {
         { label: `Quit ${PRODUCT}`, click: () => app.quit() },
       ]),
     );
-    tray.on("click", () => showApp());
+    if (!isMac) tray.on("click", () => showApp()); // on macOS a click opens the menu, as menu bar icons do
   } else if (!want && tray) {
     tray.destroy();
     tray = null;
   }
 }
 
-/** Start at login, in the background (opt-in). Linux has no login-item API: an autostart entry instead. */
+/** macOS: true when LifeHarness runs from Applications (from Downloads or the disk image, macOS gives it a
+ *  temporary read-only path, which can't be started at login). Always true elsewhere. */
+const inApplications = () => !isMac || app.isInApplicationsFolder();
+
+/** Start at login, in the background (opt-in): an autostart entry on Linux, a LaunchAgent on macOS
+ *  (electron/login-item.cjs), the registry on Windows. */
 function applyLoginItem() {
   if (!app.isPackaged) return; // a development run never registers itself
   const on = shellSettings().atLogin;
@@ -419,12 +443,16 @@ function applyLoginItem() {
         return;
       }
       const exe = process.env.APPIMAGE || process.execPath; // an AppImage runs from a temporary mount
-      const args = [BACKGROUND_ARG, ...(process.env.APPIMAGE ? ["--no-sandbox"] : [])].join(" ");
       fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(
-        file,
-        `[Desktop Entry]\nType=Application\nName=${PRODUCT}\nComment=Reminders for your plan\nExec="${exe}" ${args}\nIcon=lifeharness\nTerminal=false\nNoDisplay=true\nX-GNOME-Autostart-enabled=true\n`,
-      );
+      fs.writeFileSync(file, autostartEntry(exe, [BACKGROUND_ARG, ...(process.env.APPIMAGE ? ["--no-sandbox"] : [])], PRODUCT));
+    } else if (isMac) {
+      const file = path.join(app.getPath("home"), "Library", "LaunchAgents", `${LOGIN_LABEL}.plist`);
+      if (!on || !inApplications()) {
+        fs.rmSync(file, { force: true });
+        return;
+      }
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, launchAgentPlist(process.execPath, [BACKGROUND_ARG]));
     } else {
       app.setLoginItemSettings({ openAtLogin: on, args: [BACKGROUND_ARG] });
     }
@@ -460,14 +488,30 @@ const liveNotifications = new Set(); // keep references: a garbage-collected not
 let reminderTimers = [];
 let reminderLoop = null;
 
-function notify(title, body, page) {
-  if (!Notification.isSupported()) return;
+// Whether this computer shows LifeHarness's notifications: "untested" until one is shown or refused.
+// macOS refuses them from an app it can't verify (Electron: notifications there need a code-signed app);
+// Settings → Reminders then says so, and points to the calendar options.
+let notificationState = "untested";
+
+/** A notification, ready to show (handlers attached first: some systems report "show" at once). */
+function makeNotification(title, body, page) {
+  if (!Notification.isSupported()) return null;
   const n = new Notification({ title, body, icon: path.join(__dirname, "icon.png") });
   liveNotifications.add(n);
   if (liveNotifications.size > 20) liveNotifications.delete(liveNotifications.values().next().value);
   n.on("click", () => showApp(page));
   n.on("close", () => liveNotifications.delete(n));
-  n.show();
+  n.on("show", () => (notificationState = "shown"));
+  n.on("failed", (_e, error) => {
+    notificationState = "failed";
+    liveNotifications.delete(n);
+    log(`notification refused: ${String(error).slice(0, 200)}`); // the system's reason, never the text
+  });
+  return n;
+}
+
+function notify(title, body, page) {
+  makeNotification(title, body, page)?.show();
 }
 
 /** Fetch what's due in the next hour and set a timer for each (the list covers 36 hours). */
@@ -514,27 +558,93 @@ function startReminders() {
   powerMonitor.on("unlock-screen", refreshReminders);
 }
 
-/** The first time the window closes to the tray, say so (once). */
-function noteStillRunning() {
-  const file = path.join(userData(), "shell-state.json");
-  let st = {};
+/** The shell's own small state (which one-time notices were shown), beside window-state.json. */
+const shellStateFile = () => path.join(userData(), "shell-state.json");
+function shellState() {
   try {
-    st = JSON.parse(fs.readFileSync(file, "utf8"));
+    return JSON.parse(fs.readFileSync(shellStateFile(), "utf8"));
   } catch {
-    /* first time */
+    return {}; // first time
   }
-  if (st.backgroundNoticeShown) return;
+}
+function saveShellState(patch) {
   try {
-    fs.writeFileSync(file, JSON.stringify({ ...st, backgroundNoticeShown: true }));
+    fs.writeFileSync(shellStateFile(), JSON.stringify({ ...shellState(), ...patch }));
   } catch {
     /* best effort */
   }
-  notify(`${PRODUCT} is still running`, "Reminders keep coming. Quit from the tray icon, or change this in Settings → Reminders.", "/settings");
+}
+
+/** The first time the window closes to the tray, say so (once). */
+function noteStillRunning() {
+  if (shellState().backgroundNoticeShown) return;
+  saveShellState({ backgroundNoticeShown: true });
+  const how = isMac ? "Quit from the menu bar icon or with ⌘Q" : "Quit from the tray icon";
+  notify(`${PRODUCT} is still running`, `Reminders keep coming. ${how}, or change this in Settings → Reminders.`, "/settings");
+}
+
+/** macOS: run from Downloads or the disk image, the app gets a temporary path and can't start at login.
+ *  Offer to move it to Applications ("Don't ask again" is remembered). True when it's moving: macOS then
+ *  quits this copy and opens the one in Applications. */
+async function offerMoveToApplications() {
+  if (!isMac || !app.isPackaged || inApplications() || shellState().moveDeclined) return false;
+  const { response, checkboxChecked } = await dialog.showMessageBox({
+    type: "question",
+    buttons: ["Move to Applications", "Not Now"],
+    defaultId: 0,
+    cancelId: 1,
+    message: `Move ${PRODUCT} to your Applications folder?`,
+    detail: "It's running from the disk image or Downloads. From Applications it can start when you log in, and it keeps working after the disk image is ejected.",
+    checkboxLabel: "Don't ask again",
+  });
+  if (response !== 0) {
+    if (checkboxChecked) saveShellState({ moveDeclined: true });
+    return false;
+  }
+  try {
+    return app.moveToApplicationsFolder();
+  } catch (err) {
+    log(`move to Applications: ${err.message}`);
+    return false;
+  }
+}
+
+/** macOS: menus and dialogs follow the theme's light or dark, not the system's. */
+function followTheme(background) {
+  if (!isMac || !/^#[0-9a-f]{6}$/i.test(background)) return;
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(background.slice(i, i + 2), 16));
+  nativeTheme.themeSource = 0.2126 * r + 0.7152 * g + 0.0722 * b < 128 ? "dark" : "light";
 }
 
 function buildMenu() {
+  if (isMac) {
+    app.setAboutPanelOptions({ credits: "Free software under the GNU AGPL v3.0." }); // name, version, copyright: Info.plist
+    app.dock?.setMenu(
+      Menu.buildFromTemplate([
+        { label: "Today", click: () => showApp("/today") },
+        { label: "Week", click: () => showApp("/week") },
+      ]),
+    );
+  }
+  const appMenu = {
+    label: PRODUCT,
+    submenu: [
+      { role: "about" },
+      { type: "separator" },
+      // ⌘, itself is the page's shortcut (components/Shell.tsx): shown here, handled there.
+      { label: "Settings…", accelerator: "Command+,", registerAccelerator: false, click: () => showApp("/settings") },
+      { type: "separator" },
+      { role: "services" },
+      { type: "separator" },
+      { role: "hide" },
+      { role: "hideOthers" },
+      { role: "unhide" },
+      { type: "separator" },
+      { role: "quit" },
+    ],
+  };
   const template = [
-    ...(isMac ? [{ role: "appMenu" }] : []),
+    ...(isMac ? [appMenu] : []),
     {
       label: "File",
       submenu: [
@@ -567,6 +677,7 @@ ipcMain.on("lh:set-chrome", (e, c) => {
   if (!w || !c || typeof c.background !== "string") return;
   try {
     w.setBackgroundColor(c.background);
+    followTheme(c.background);
     if (!isMac && typeof w.setTitleBarOverlay === "function") w.setTitleBarOverlay({ color: c.background, symbolColor: c.symbol });
   } catch (err) {
     log(`set-chrome failed: ${err}`);
@@ -581,7 +692,30 @@ ipcMain.on("lh:refresh-shell", () => {
   applyLoginItem();
   refreshReminders();
 });
-ipcMain.handle("lh:shell-info", () => ({ atLoginSupported: app.isPackaged }));
+ipcMain.handle("lh:shell-info", () => ({
+  atLoginSupported: app.isPackaged && inApplications(),
+  atLoginNote: !app.isPackaged ? "available in the installed app" : inApplications() ? "" : `move ${PRODUCT} to Applications first`,
+  notifications: notificationState,
+}));
+
+// Settings → Reminders → "Send a test reminder": shown, refused (with the system's reason), or sent with no
+// answer within 5 s (not every system reports showing one).
+ipcMain.handle(
+  "lh:test-reminder",
+  () =>
+    new Promise((resolve) => {
+      const n = makeNotification("Reminders work", `This is how ${PRODUCT} tells you a block is starting.`, "/settings");
+      if (!n) return resolve({ result: "unsupported" });
+      const done = (r) => {
+        clearTimeout(timer);
+        resolve(r);
+      };
+      const timer = setTimeout(() => done({ result: "sent" }), 5000);
+      n.once("show", () => done({ result: "shown" }));
+      n.once("failed", (_e, error) => done({ result: "failed", error: String(error).slice(0, 200) }));
+      n.show();
+    }),
+);
 
 app.whenReady().then(async () => {
   buildMenu();
@@ -589,6 +723,7 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === "clipboard-sanitized-write"));
   try {
     rotate(path.join(logDir(), "main.log"));
+    if (await offerMoveToApplications()) return; // macOS reopens it from Applications
     // Started at login: stay in the tray until needed (only while reminders keep it running).
     const hidden = process.argv.includes(BACKGROUND_ARG) && shellSettings().background;
     if (!hidden) createWindow(); // "Starting…" right away
@@ -612,9 +747,10 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
-  // Reminders keep running in the tray; otherwise closing the window quits (except on macOS).
+  // Reminders keep running in the tray (menu bar); otherwise closing the window quits. On macOS too: there
+  // "Run in the background" off means no reminders after the window closes, so nothing is left running.
   if (!quitting && appUrl && shellSettings().background) return noteStillRunning();
-  if (!isMac) app.quit();
+  app.quit();
 });
 app.on("activate", () => {
   if (!win && BrowserWindow.getAllWindows().length === 0 && appUrl) showApp();

@@ -111,6 +111,36 @@ try {
     check(!fs.existsSync(entry), "turning it off removes the entry");
   }
 
+  // 4b) Settings → Reminders → "Send a test reminder": the shell reports what the system did with it.
+  //     Notifications are captured here, so play the system: refuse one (as macOS does for an app it
+  //     can't verify), then show one.
+  type Bridge = { testReminder: () => Promise<{ result: string; error?: string }>; shellInfo: () => Promise<{ atLoginSupported: boolean; notifications?: string }> };
+  const answer = async (event: "failed" | "show") => {
+    await page.evaluate(() => {
+      const w = window as unknown as { lifeharness: Bridge; __test: Promise<unknown> };
+      w.__test = w.lifeharness.testReminder();
+    });
+    for (let i = 0; i < 50 && !(await shown()).some((n) => n.title === "Reminders work"); i++) await sleep(100);
+    await app.evaluate((_e, ev) => {
+      const list = (globalThis as unknown as { __shown: Electron.Notification[] }).__shown;
+      const n = list.filter((x) => x.title === "Reminders work").pop()!;
+      list.splice(list.indexOf(n), 1);
+      if (ev === "failed") n.emit("failed", {}, "Notifications are not allowed for this application");
+      else n.emit("show", {});
+    }, event);
+    const result = await page.evaluate(() => (window as unknown as { __test: Promise<{ result: string; error?: string }> }).__test);
+    const info = await page.evaluate(() => (window as unknown as { lifeharness: Bridge }).lifeharness.shellInfo());
+    return { result, info };
+  };
+  const refused = await answer("failed");
+  check(
+    refused.result.result === "failed" && /not allowed/.test(refused.result.error ?? "") && refused.info.notifications === "failed",
+    "a refused test reminder is reported, with the system's reason, and Settings learns of it",
+    JSON.stringify(refused),
+  );
+  const ok = await answer("show");
+  check(ok.result.result === "shown" && ok.info.notifications === "shown" && ok.info.atLoginSupported === true, "a shown one is reported as shown", JSON.stringify(ok));
+
   // 5) Closing the window keeps the app (and its reminders) running, and says so once.
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.close());
   await sleep(2000);
