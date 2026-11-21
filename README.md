@@ -42,9 +42,26 @@ Download `LifeHarness-<version>-x64-setup.exe` from the [Releases page](https://
 - **Updating:** run the newer installer. Your data is kept.
 - **Removing:** **Settings → Apps → Installed apps → LifeHarness → Uninstall**. Your data stays in `%APPDATA%\LifeHarness` until you delete it.
 
+### macOS desktop app
+
+You need macOS 13 (Ventura) or later. From the [Releases page](https://github.com/eOvic/LifeHarness/releases), download the disk image for your Mac's chip:
+- **Apple silicon** (M1 or newer): `LifeHarness-<version>-arm64.dmg`. **Apple menu → About This Mac** shows "Chip: Apple M…".
+- **Intel:** `LifeHarness-<version>-x64.dmg`.
+
+Open the disk image and drag LifeHarness into Applications.
+- **First open: "Apple could not verify LifeHarness…".** LifeHarness isn't notarized by Apple yet, so macOS asks once. Click **Done**, open **System Settings → Privacy & Security**, scroll down to the message about LifeHarness, click **Open Anyway**, and confirm with your password. After that it opens normally.
+- **Run it from Applications.** Opened from the disk image or Downloads, it offers to move itself there. Starting at login needs it.
+- **Reminders:** allow notifications when macOS asks, or later in **System Settings → Notifications → LifeHarness**. To check, use **Settings → Reminders → Send a test reminder**. macOS may refuse notifications from an app that Apple hasn't signed; LifeHarness then says so. In that case, get your reminders from a calendar: [Google Calendar sync](#4-the-week-and-your-phones-calendar), or **Export .ics** into Apple Calendar.
+- **Menu bar:** while reminders run in the background, LifeHarness has an icon in the menu bar. **⌘Q** quits.
+- **Updating:** drag the newer version into Applications and replace the old one. Your data is kept.
+- **Removing:** drag LifeHarness from Applications to the Trash. Your data stays in `~/Library/Application Support/LifeHarness` until you delete it.
+
 ### Build the installers yourself
 
-You need [Node.js](https://nodejs.org) 22 or newer and [Git](https://git-scm.com). Build on the system you're building for: Linux makes the `.deb` and AppImage, Windows makes the setup `.exe`.
+You need [Node.js](https://nodejs.org) 22 or newer and [Git](https://git-scm.com). Build on the system you're building for:
+- **Linux** makes the `.deb` and AppImage.
+- **Windows** makes the setup `.exe`.
+- **A Mac** makes both `.dmg` files. Without an Apple Developer ID they're signed ad hoc; see [docs/development.md](docs/development.md).
 
 ```bash
 git clone https://github.com/eOvic/LifeHarness.git && cd LifeHarness
@@ -151,7 +168,7 @@ Mark each block as you go:
 The **Now** card in the sidebar always shows your current block and what's next, from any page.
 
 **Reminders** (desktop app): a notification when each block starts, with its if-then plan, and an evening check-in at 21:30 if some of the day's blocks aren't marked yet. Clicking one opens Today. Blocks you've already marked are skipped.
-- **When you close the window,** LifeHarness keeps running in the tray, so reminders keep coming. Quit from the tray icon.
+- **When you close the window,** LifeHarness keeps running in the tray (on macOS, the menu bar), so reminders keep coming. Quit from that icon, or with **⌘Q** on a Mac.
 - **To change them, go to Settings → Reminders.** You can get them 5–15 minutes before a block starts, turn on prayer times, move or turn off the check-in, turn off background running, or start LifeHarness when you log in.
 - **On your phone,** use your calendar for now: see the next section.
 
@@ -228,12 +245,12 @@ Should your local mosque or app differ by a minute or two, ask the coach to adju
 
 ## Settings, themes and shortcuts
 
-**Settings** (bottom of the sidebar, or **Ctrl+,**) holds:
+**Settings** (bottom of the sidebar, **Ctrl+,**, or **⌘,** on a Mac) holds:
 - **AI models:** connect or disconnect providers, and pick the model and reasoning level.
 - **Appearance:** eight themes, dark and light. The desktop window's buttons follow the theme.
 - **Time:** your timezone and the first day of your week.
 - **Prayer times:** see [above](#prayer-times-optional).
-- **Reminders:** what to be reminded of and when, running in the background, and starting at login.
+- **Reminders:** what to be reminded of and when, running in the background, starting at login, and a test reminder.
 - **Google Calendar:** connect, sync now, disconnect (see [above](#4-the-week-and-your-phones-calendar)).
 - **Data & privacy:** where your files are, with **Open** buttons in the desktop app.
 
@@ -248,6 +265,8 @@ Should your local mosque or app differ by a minute or two, ask the coach to adju
 | **Ctrl+Plus** / **Ctrl+Minus** / **Ctrl+0** | Zoom in / out / reset (desktop app) |
 | Right-click | Cut, copy, paste and spelling suggestions (desktop app) |
 
+On a Mac, use **⌘** wherever this table says **Ctrl**.
+
 The sidebar hides itself in narrow windows; **Ctrl+B** brings it back, and LifeHarness remembers your choice.
 
 ---
@@ -255,7 +274,7 @@ The sidebar hides itself in narrow windows; **Ctrl+B** brings it back, and LifeH
 ## Your data and privacy
 
 **What stays on your computer:**
-- **Your life map, plans, tracking and conversations:** plain files readable only by your user account. In the desktop app they're in `~/.config/LifeHarness/data` on Linux and `%APPDATA%\LifeHarness\data` on Windows (**File → Open data folder**); in browser mode, in the project's `data/` folder.
+- **Your life map, plans, tracking and conversations:** plain files readable only by your user account. In the desktop app they're in `~/.config/LifeHarness/data` on Linux, `%APPDATA%\LifeHarness\data` on Windows and `~/Library/Application Support/LifeHarness/data` on macOS (**File → Open data folder**); in browser mode, in the project's `data/` folder.
 - **Your sign-ins and API keys:** in `auth.json` in the same `LifeHarness` folder, readable only by you, and never shown in the app. Disconnecting a provider removes its key.
 - **While Claude Code works:** it reads a copy of the coaching prompt, which includes your life map, from a private folder inside that same `LifeHarness` folder. The copy is deleted when the run ends, and the app clears any leftovers when it starts.
 
@@ -279,19 +298,21 @@ The sidebar hides itself in narrow windows; **Ctrl+B** brings it back, and LifeH
 |---|---|
 | "No AI model is connected" | Connect one in **Settings → AI models** (see [above](#first-run-connect-an-ai-model)). Your session waits and continues once you do. |
 | "Claude Code isn't signed in" | In a terminal, run `claude auth login`, then click **Retry**. |
-| "Claude Code isn't installed", or Claude won't connect | Install it ([guide](https://code.claude.com/docs/en/setup)) and check that `claude --version` works in a terminal (on Windows, PowerShell), then **Check again**. LifeHarness looks in your PATH and in usual places like `~/.local/bin`. On Windows it finds Anthropic's installer, WinGet, Scoop, Bun and npm installs. |
+| "Claude Code isn't installed", or Claude won't connect | Install it ([guide](https://code.claude.com/docs/en/setup)) and check that `claude --version` works in a terminal (on Windows, PowerShell), then **Check again**. LifeHarness looks in your PATH and in usual places like `~/.local/bin`. On Windows it finds Anthropic's installer, WinGet, Scoop, Bun and npm installs. On a Mac it also finds Homebrew and npm installs, even when LifeHarness is opened from the Dock. |
 | "…usage limit is reached" | Your plan's or account's limit for now. The message says when it resets; you can also switch model in Settings. |
 | "…rejected that key" | Copy the whole key again, with no spaces. Check that your provider account has billing or credit set up. |
 | ChatGPT sign-in says its port is in use | Another sign-in (for example the Codex CLI) is using it: close that, then try again. |
 | The browser doesn't return to LifeHarness after signing in | Copy the address the browser ends on and paste it into the box LifeHarness shows. |
 | The AppImage doesn't start | Run it with `--no-sandbox`, or install the `.deb` instead. |
 | Windows won't run the installer | SmartScreen blocks unsigned installers at first: click **More info → Run anyway**. |
-| No notifications | Check **Settings → Reminders** and your system's Do Not Disturb. On Windows, install with the setup `.exe` (the test zip can't show notifications). On Linux, the tray icon needs your desktop's tray (AppIndicator) support, which Ubuntu has. |
-| Closing the window doesn't quit | That keeps reminders coming. Quit from the tray icon (or File → Quit), or turn off **Settings → Reminders → Background**. |
+| macOS: "Apple could not verify LifeHarness…" | It isn't notarized yet. Go to **System Settings → Privacy & Security → Open Anyway**; you only do this once. |
+| macOS: "LifeHarness is damaged and can't be opened" | macOS rejected the downloaded copy. In Terminal, run `xattr -dr com.apple.quarantine /Applications/LifeHarness.app`, then open LifeHarness again. |
+| No notifications | Check **Settings → Reminders** and your system's Do Not Disturb. On Windows, install with the setup `.exe` (the test zip can't show notifications). On Linux, the tray icon needs your desktop's tray (AppIndicator) support, which Ubuntu has. On a Mac, allow LifeHarness in **System Settings → Notifications**. If it isn't listed there, macOS won't let this unsigned copy notify; use Google Calendar sync or Apple Calendar instead. |
+| Closing the window doesn't quit | That keeps reminders coming. Quit from the tray icon (the menu bar on a Mac), with **File → Quit** or **⌘Q**, or turn off **Settings → Reminders → Background**. |
 | Google: "Google hasn't verified this app" | Expected for your own client. Click **Advanced → Go to LifeHarness**. |
 | Google: the connection ends after a week | Your Google project is still in **Testing**: under **Google Auth Platform → Audience**, click **Publish app**, then connect again. |
 | Google: "Calendar API has not been used in project…" | Enable the **Google Calendar API** in that Google Cloud project, wait a minute, then **Sync now**. |
-| The app seems stuck | It restarts its own engine if it crashes. If not, quit and reopen. Logs are under **File → Open logs folder** (`~/.config/LifeHarness/logs`, or `%APPDATA%\LifeHarness\logs` on Windows). |
+| The app seems stuck | It restarts its own engine if it crashes. If not, quit and reopen. Logs are under **File → Open logs folder** (`~/.config/LifeHarness/logs`, `%APPDATA%\LifeHarness\logs` on Windows, `~/Library/Application Support/LifeHarness/logs` on macOS). |
 | A session stopped halfway | Click **Continue** or **Retry** under the conversation. Nothing you answered is lost. |
 
 **Still stuck, or found a bug?** Open an issue on [GitHub](https://github.com/eOvic/LifeHarness/issues), saying what you did and what you saw. Leave out personal details: your plans and conversations stay on your computer unless you paste them.

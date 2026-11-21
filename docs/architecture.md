@@ -112,7 +112,7 @@ Writes go to a temp file and are then renamed into place. One server process sho
 **Packaged startup.** The shell:
 1. picks a free `127.0.0.1` port;
 2. spawns `resources/server/server.js` (the Next **standalone** build) with `process.execPath` and `ELECTRON_RUN_AS_NODE=1`, so no separate Node install is needed;
-3. sets `LIFEHARNESS_DATA_DIR=~/.config/LifeHarness/data`, `LIFEHARNESS_AUTH_FILE=~/.config/LifeHarness/auth.json`, the per-launch `LIFEHARNESS_API_SECRET` and the version;
+3. sets `LIFEHARNESS_DATA_DIR=<userData>/data`, `LIFEHARNESS_AUTH_FILE=<userData>/auth.json`, the per-launch `LIFEHARNESS_API_SECRET` and the version. `<userData>` is `~/.config/LifeHarness`, `%APPDATA%\LifeHarness` or `~/Library/Application Support/LifeHarness`;
 4. polls `/api/health`, then loads the app;
 5. if the server dies, restarts it on the same port and reloads the window (gives up with a dialog after 3 exits in a minute);
 6. on quit, stops the server. Its process is named `next-server (v16…)`, not `lifeharness`.
@@ -124,6 +124,7 @@ Logs (`main.log`, `server.log`) rotate past 5 MB. A right-click menu provides cu
 **Window.** It's frameless:
 - On Linux and Windows, `titleBarOverlay` draws the native buttons in the theme's colors. The renderer reports theme changes through the preload bridge (`window.lifeharness.setChrome`).
 - The page's 60px headers are the drag region, and `env(titlebar-area-*)` keeps their content clear of the buttons.
+- On macOS the traffic lights sit top-left (`titleBarStyle: "hiddenInset"`, at 18,22). The leftmost header band leaves them 88px: the sidebar's, or the page's while the sidebar is hidden (`.lh-traffic`). The server marks `<html data-chrome="mac">` for the first frame. Menus and dialogs follow the theme's light or dark (`nativeTheme`).
 - The background matches the theme, and the window shows on `ready-to-show`.
 - Size and position are persisted.
 
@@ -135,9 +136,23 @@ Logs (`main.log`, `server.log`) rotate past 5 MB. A right-click menu provides cu
 **Packaging.** `npm run desktop:build`:
 1. builds the standalone server (`LIFEHARNESS_STANDALONE=1 next build`);
 2. assembles the server and ships the AI engine **whole**: Next's file tracing only follows static imports, and pi loads its sign-in flows and provider SDKs lazily, so tracing alone shipped about a quarter of it (the first packaged build failed at the first model call). `scripts/server-deps.mjs` copies the full production dependency closure of the external packages, and `scripts/verify-server.mjs` checks it twice (staging folder, then the packaged app): every file present, and every pi-ai module importable from inside the server folder;
-3. stages a dependency-free app folder (`desktop-app/`: main, preload, icon);
-4. runs electron-builder, whose `afterPack` hook copies the server, including its `node_modules` and Turbopack's relative symlinks, into `resources/server`;
-5. outputs a `.deb` (with an AppArmor profile for Ubuntu 24.04+'s user-namespace restriction) and an AppImage.
+3. stages a dependency-free app folder (`desktop-app/`: main, preload, login item, icons);
+4. runs electron-builder. Its `afterPack` hook:
+   - copies the server, including its `node_modules` and Turbopack's relative symlinks, into the resources folder (`resources/server`, or `LifeHarness.app/Contents/Resources/server` on macOS);
+   - keeps only that OS's prebuilt native add-ons;
+   - writes the licenses;
+5. outputs:
+   - on Linux: a `.deb` (with an AppArmor profile for Ubuntu 24.04+'s user-namespace restriction) and an AppImage;
+   - on Windows: a per-user NSIS installer;
+   - on macOS: a `.dmg` per chip.
+
+**macOS.** Built on a Mac: GitHub's Apple silicon runner makes both the arm64 and x64 disk images. electron-builder runs `afterPack` before signing, so everything copied into the app is covered by its signature.
+- **Signing:** without an Apple Developer ID, the app is signed ad hoc (`mac.identity=-`), because Apple silicon only runs signed code; macOS then asks for **Open Anyway** once. With `CSC_LINK` and the `APPLE_*` notary variables, electron-builder signs with the Developer ID (hardened runtime) and notarizes. `signIgnore` keeps fonts, images and WebAssembly from being signed one by one: they're sealed like any resource.
+- **Second Dock icon:** Next sets `process.title`, and in Electron's Node mode on macOS that registers the server with Launch Services as the app itself, so a second icon appeared in the Dock. The shell starts the server with `--require server-title-guard.cjs`, which keeps the title in JavaScript (adapted from LearnHarness).
+- **Menus:** an app menu with **Settings… ⌘,** and a Dock menu (Today, Week). The menu bar icon is a template image (`trayTemplate.png`, @2x), which macOS tints.
+- **Start at login:** a LaunchAgent (`~/Library/LaunchAgents/dev.lifeharness.desktop.plist`, `electron/login-item.cjs`), because `app.setLoginItemSettings` can't pass `--background` there, and Electron warns it can fail for an app that isn't notarized. It's only written while the app runs from Applications. An app run from Downloads or the disk image gets a temporary path, so on first open the app offers to move itself to Applications.
+- **Notifications:** Electron uses Apple's UNNotification API, which refuses an app it can't verify. A refused notification emits `failed`. The shell records it, and Settings → Reminders explains it and points to the calendar options. **Send a test reminder** checks it on demand.
+- **Claude Code:** an app opened from the Dock gets only `/usr/bin:/bin:/usr/sbin:/sbin` on its PATH. A script-based install (npm's `#!/usr/bin/env node`) is started with its own folder first on PATH, then Homebrew's and `/usr/local`'s.
 
 ## Credentials and model choice
 

@@ -22,20 +22,31 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - **Desktop:**
   - `npm run desktop` runs dev mode, with `--no-sandbox` on Linux because of Ubuntu's userns restriction.
   - `npm run desktop:build [-- --dir] [-- --skip-next]` builds the packages into `dist-desktop/`.
-  - The packaged app's data is `~/.config/LifeHarness/data`. Set `LIFEHARNESS_DATA_DIR` when testing so real data isn't touched.
+  - The packaged app's data is `~/.config/LifeHarness/data` (`%APPDATA%\LifeHarness\data` on Windows, `~/Library/Application Support/LifeHarness/data` on macOS). Set `LIFEHARNESS_DATA_DIR` when testing so real data isn't touched.
   - `LIFEHARNESS_SHOT=/x.png LIFEHARNESS_SHOT_PATH=/week` makes the shell capture its page and quit.
+- **Deleting files: only an explicit, checked path.**
+  - Write `"${dir:?}"`, never a bare `$dir`. An empty variable must fail, not turn into "the current folder": `find` with no path argument deletes under the current folder.
+  - Never send a command that starts with `cd` to the background (`cd x && cmd &`). The `cd` goes into the background too, and the commands after it run in the folder you started in.
+  - A cleanup that once broke both rules wiped everything in the folder the shell started in. Prefer scratch folders in RAM (`/dev/shm`) with fixed names.
 - **Stopping processes.** Never use `pkill -f` or `ps | grep` patterns that also appear in your own command line: they kill your shell. Use `pgrep -x electron` or `pgrep -x lifeharness` (process names), or kill by port or by saved PID. The packaged app's server renames itself `next-server (v16…)`: check for orphans with `ps -eo comm | grep -c '^next-server'`.
 - **Claude Code provider** (`src/server/claude-code.ts`, `claude-code-bridge.ts`): never read Claude credentials or account status; keep tool admission MCP-only (no stdout-only execution). Test with the fake CLI in `tests/claude-code.test.ts`; `LIFEHARNESS_DEBUG_CLAUDE=1` explains reuse decisions; live checks cost the user's plan usage, so keep them to a turn or two.
 - **Credentials.** The app uses its own `~/.config/LifeHarness/auth.json` (Settings → AI models), never pi's. Tests and QA must use scratch credentials: `LIFEHARNESS_AUTH_FILE=$(mktemp -d)/auth.json`, or `XDG_CONFIG_HOME=$(mktemp -d)` for the packaged app. Don't offer or use Claude Pro/Max sign-in directly (Anthropic's terms): Claude plans go through the person's own Claude Code.
 - **QA without spending money.** `npm run seed -- <dir>` writes demo data with no model calls. `scripts/qa-connections.ts` exercises every connect path (a deliberately invalid key, sign-in start, device code), saving nothing. `npm run qa:desktop` drives the packaged app at 3 window sizes.
 - **Packaging guard.** `desktop:build` copies the AI engine whole and runs `scripts/verify-server.mjs` twice. If it fails, a lazily loaded module is missing: don't ship.
-- **Windows works too.** Keep it that way:
+- **Windows and macOS work too.** Keep it that way:
   - **Child processes:** spawn without a shell, without `npx`, and with `windowsHide: true`. Only `claude.exe` counts on Windows.
   - **Stopping processes:** kill a tree with `taskkill /T` on Windows, a process group elsewhere.
   - **Environment:** no `VAR=1 cmd` in npm scripts. Use `scripts/next.mjs` or set it in code.
   - **Paths:** build them with `path.join`, and check Windows path forms in privacy checks (backslashes, doubled in JSON).
   - **Release builds:** build installers on the OS they're for.
   - **Temporary files:** never put anything personal in the system temp folder; Windows never cleans it. Claude Code's run folders live in the app's private folder (`src/server/claude-runs.ts`).
+  - **macOS specifics:**
+    - **Resources** are in `LifeHarness.app/Contents/Resources` (see `after-pack.cjs` and `desktop-build.mjs`).
+    - **The server** starts with `--require server-title-guard.cjs`; without it, a second Dock icon appears.
+    - **Start at login** is a LaunchAgent (`electron/login-item.cjs`); `setLoginItemSettings` can't start the app in the background there.
+    - **The traffic lights** need `lh-traffic` on the leftmost header band.
+    - **Notifications** can be refused by macOS for an unsigned app, and the shell reports it.
+    - **Tests** act as a Mac with `LIFEHARNESS_PLATFORM=darwin`.
   - **Checking the OS:** never test `process.platform` in bundled code. Turbopack decides such conditions at build time and drops the other branch, so a Linux build behaved like Linux on Windows. Ask `src/server/platform.ts` instead (`LIFEHARNESS_PLATFORM` lets tests act as Windows). `tests/platform.test.ts` and the desktop build both enforce it.
 - **License: AGPL-3.0-only** (like LearnHarness).
   - **Borrowed code:** only from compatible licenses, with a header saying where it came from (as in `claude-code.ts`). Never copy code from incompatible sources.

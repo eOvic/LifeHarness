@@ -48,7 +48,8 @@ Next:
 - ~~System notifications~~ at block starts and for the evening "mark today": **done in 0.4.0**, with the tray and start on login.
 - ~~Google Calendar sync~~: **done in 0.5.0**. LifeHarness's own "LifeHarness" calendar, kept in step with the plan, gives reminders on the phone (narrow `calendar.app.created` scope, with your own Google client). Next: marking blocks from the phone.
 - **Top-bar widget.**
-- ~~Windows build~~ (0.3.x). macOS; code signing.
+- ~~Windows build~~ (0.3.x). ~~macOS build~~ (**0.6.0**: a `.dmg` for Apple silicon and one for Intel, signed ad hoc).
+- **Code signing:** an Apple Developer ID with notarization, so macOS opens LifeHarness without asking and can't refuse its notifications; on Windows, a certificate, so SmartScreen stops warning. The macOS build already signs and notarizes when the secrets are set.
 
 Original plan:
 
