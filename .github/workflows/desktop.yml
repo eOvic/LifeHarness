@@ -31,12 +31,16 @@ jobs:
           - { name: Windows, os: windows-latest }
           - { name: macOS, os: macos-latest }
     runs-on: ${{ matrix.os }}
-    env:
-      # Tests and builds never touch real data or credentials.
-      LIFEHARNESS_DATA_DIR: ${{ runner.temp }}/lh-data
-      LIFEHARNESS_AUTH_FILE: ${{ runner.temp }}/lh-auth/auth.json
     steps:
       - uses: actions/checkout@v4
+
+      # Tests and builds never touch real data or credentials: scratch folders in the runner's temp.
+      # (A job's env can't use the runner context, so every later step gets them from here.)
+      - name: Scratch data folders
+        shell: bash
+        run: |
+          echo "LIFEHARNESS_DATA_DIR=$RUNNER_TEMP/lh-data" >> "$GITHUB_ENV"
+          echo "LIFEHARNESS_AUTH_FILE=$RUNNER_TEMP/lh-auth/auth.json" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v4
         with:
