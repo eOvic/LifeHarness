@@ -12,7 +12,7 @@ import { configDir } from "@/src/server/config-dir";
 import { makeRunDir, runsRoot, sweepClaudeRuns } from "@/src/server/claude-runs";
 import { replaceFile } from "@/src/server/store";
 
-const ENV_KEYS = ["PATH", "HOME", "APPDATA", "LOCALAPPDATA", "USER", "XDG_CONFIG_HOME", "npm_config_prefix", "LIFEHARNESS_CLAUDE_BIN", "LIFEHARNESS_CONFIG_DIR", "LIFEHARNESS_PLATFORM"];
+const ENV_KEYS = ["PATH", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "USER", "XDG_CONFIG_HOME", "npm_config_prefix", "LIFEHARNESS_CLAUDE_BIN", "LIFEHARNESS_CONFIG_DIR", "LIFEHARNESS_PLATFORM"];
 let saved: Record<string, string | undefined> = {};
 let root = "";
 beforeEach(() => {
@@ -20,6 +20,7 @@ beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "lh-platform-"));
   for (const k of ENV_KEYS) delete process.env[k];
   process.env.HOME = path.join(root, "home"); // never find the real Claude Code
+  process.env.USERPROFILE = process.env.HOME; // os.homedir() reads this one on Windows
   process.env.PATH = "";
 });
 afterEach(() => {
@@ -100,7 +101,8 @@ describe("finding Claude Code", () => {
     expect(findClaude()).toEqual({ file: bin, pre: [] });
   });
 
-  it("macOS: npm's Claude Code is a Node script; opened from the Dock, its own folder (with Node) and Homebrew's come first on PATH", () => {
+  // Simulating Linux and macOS PATH handling needs a POSIX path module: not on a Windows machine.
+  it.skipIf(process.platform === "win32")("macOS: npm's Claude Code is a Node script; opened from the Dock, its own folder (with Node) and Homebrew's come first on PATH", () => {
     process.env.LIFEHARNESS_PLATFORM = "darwin";
     process.env.PATH = "/usr/bin:/bin:/usr/sbin:/sbin"; // what an app opened from the Dock or Finder gets
     const script = put("home/.local/bin/claude", "#!/usr/bin/env node\nrequire('./cli.js')");
@@ -111,7 +113,7 @@ describe("finding Claude Code", () => {
     });
   });
 
-  it("Linux: a script gets its own folder first on PATH, and nothing Mac-specific", () => {
+  it.skipIf(process.platform === "win32")("Linux: a script gets its own folder first on PATH, and nothing Mac-specific", () => {
     process.env.LIFEHARNESS_PLATFORM = "linux";
     const script = put("bin/claude", "#!/bin/sh");
     process.env.PATH = [path.join(root, "bin"), "/usr/bin"].join(":");

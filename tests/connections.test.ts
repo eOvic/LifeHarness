@@ -126,9 +126,9 @@ describe("privacy", () => {
 describe("desktop engine closure", () => {
   it("includes the lazily loaded provider SDKs that output tracing missed", () => {
     const root = path.resolve(__dirname, "..");
-    const names = (dependencyClosure(root) as string[]).map((d) => path.relative(path.join(root, "node_modules"), d));
+    const names = (dependencyClosure(root) as string[]).map((d) => path.relative(path.join(root, "node_modules"), d).replaceAll("\\", "/").toLowerCase()); // Windows: \ and any case
     for (const pkg of ["@earendil-works/pi-ai", "@earendil-works/pi-coding-agent", "@anthropic-ai/sdk", "openai", "@google/genai", "@aws-sdk/client-bedrock-runtime", "@smithy/node-http-handler", "http-proxy-agent"]) {
-      expect(names).toContain(pkg);
+      expect(names).toContain(pkg.toLowerCase());
     }
     expect(fs.existsSync(os.tmpdir())).toBe(true);
   });

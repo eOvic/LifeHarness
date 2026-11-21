@@ -15,7 +15,9 @@ const git = (args) => {
   }
 };
 const allowed = process.env.LIFEHARNESS_MAINTAINER ?? "";
-const user = os.userInfo().username;
+// On GitHub's build machines the account is "runner" / "runneradmin": not a person, and "runner" is an
+// ordinary word in library code. The home path is still checked there.
+const user = process.env.GITHUB_ACTIONS === "true" ? "" : os.userInfo().username;
 // A Windows home path can appear as C:\Users\x, doubled inside JSON, with forward slashes, or with a
 // lower-case drive letter.
 const pathForms = (p) =>
