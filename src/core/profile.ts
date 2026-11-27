@@ -1,6 +1,6 @@
 // The life map: merging the interviewer's partial updates, and measuring what is still unknown.
 import { isHM } from "./time";
-import type { FixedCommitment, Goal, Profile, ProfileSnapshot } from "./types";
+import { DAYS, type Deadline, type FixedCommitment, type Goal, type Profile, type ProfileSnapshot, type Task } from "./types";
 
 export interface ProfilePatch extends Partial<Omit<Profile, "updatedAt" | "lessons">> {
   remove?: {
@@ -14,6 +14,8 @@ export interface ProfilePatch extends Partial<Omit<Profile, "updatedAt" | "lesso
     ifThen?: string[];
     habitsRunning?: string[];
     habitsWanted?: string[];
+    tasks?: string[];
+    deadlines?: string[];
   };
 }
 
@@ -108,6 +110,18 @@ export function mergeProfile(p: Profile, patch: ProfilePatch): { profile: Profil
   if (patch.goals) next.goals = upsertById<Goal>(p.goals, patch.goals.map(normalizeGoal), "goal", changes, (g) => g.title);
   if (patch.fixed) next.fixed = upsertById<FixedCommitment>(p.fixed, patch.fixed, "fixed", changes, (f) => f.title);
   if (patch.ifThen) next.ifThen = upsertById(p.ifThen, patch.ifThen, "if-then", changes, (x) => x.then);
+  if (patch.tasks) {
+    const today = new Date().toISOString().slice(0, 10);
+    const known = new Set((p.tasks ?? []).map((t) => t.id));
+    const items = patch.tasks.filter((t) => t?.id && (known.has(t.id) || t.title)).map((t) => normalizeTask(t, known.has(t.id) ? undefined : today));
+    next.tasks = upsertById<Task>(p.tasks, items, "task", changes, (t) => t.title);
+  }
+  if (patch.deadlines) {
+    const known = new Set((p.deadlines ?? []).map((d) => d.id));
+    const items = patch.deadlines.filter((d) => d?.id && (known.has(d.id) || (d.title && /^\d{4}-\d{2}-\d{2}$/.test(d.date ?? ""))));
+    if (items.length < patch.deadlines.length) throw new Error("A new deadline needs an id, a title and a date as YYYY-MM-DD.");
+    next.deadlines = upsertById<Deadline>(p.deadlines, items.map(normalizeDeadline), "deadline", changes, (d) => `${d.title} ${d.date}`);
+  }
   for (const k of ["obstacles", "history", "preferences", "constraintsNotes"] as const) {
     if (patch[k] !== undefined) next[k] = unionStrings(p[k], patch[k], k, changes);
   }
@@ -123,6 +137,8 @@ export function mergeProfile(p: Profile, patch: ProfilePatch): { profile: Profil
     if (rm.goals?.length) next.goals = next.goals?.filter((g) => !rm.goals!.includes(g.id));
     if (rm.fixed?.length) next.fixed = next.fixed?.filter((f) => !rm.fixed!.includes(f.id));
     if (rm.ifThen?.length) next.ifThen = next.ifThen?.filter((f) => !rm.ifThen!.includes(f.id));
+    if (rm.tasks?.length) next.tasks = next.tasks?.filter((t) => !rm.tasks!.includes(t.id));
+    if (rm.deadlines?.length) next.deadlines = next.deadlines?.filter((d) => !rm.deadlines!.includes(d.id));
     if (rm.values?.length) {
       const r = rm.values.map((s) => s.toLowerCase());
       next.values = next.values?.filter((v) => !r.includes(v.name.toLowerCase()));
@@ -141,6 +157,19 @@ export function mergeProfile(p: Profile, patch: ProfilePatch): { profile: Profil
   }
   next.updatedAt = new Date().toISOString();
   return { profile: next, changes };
+}
+
+function normalizeTask(t: Task, since?: string): Task {
+  const out: Task = { ...t };
+  if (out.days) out.days = out.days.filter((d) => DAYS.includes(d));
+  if (since && !out.since) out.since = since;
+  return out;
+}
+
+function normalizeDeadline(d: Deadline): Deadline {
+  const out: Deadline = { ...d };
+  if (out.time !== undefined && !isHM(out.time)) delete out.time;
+  return out;
 }
 
 function normalizeGoal(g: Goal): Goal {

@@ -145,7 +145,7 @@ describe("which events the calendar holds", () => {
       end: { dateTime: "2026-11-20T10:00:00", timeZone: "Africa/Cairo" },
       reminderMin: 10,
     });
-    expect(plain[1].end.dateTime).toBe("2026-11-21T00:30:00");
+    expect((plain[1].end as { dateTime: string }).dateTime).toBe("2026-11-21T00:30:00");
     const withPrayers = calendarEvents(days, { ...o, reminders: reminderSettings({ prayers: true, blocks: false }) });
     expect(withPrayers.map((e) => [e.summary, e.reminderMin])).toEqual([["Read", null], ["Wind down", null], ["Dhuhr", 0]]);
     expect(REMINDER_DEFAULTS.prayers).toBe(false);

@@ -15,7 +15,11 @@ export async function GET() {
 export async function POST(req: Request) {
   const patch = (await req.json().catch(() => null)) as ProfilePatch | null;
   if (!patch || typeof patch !== "object") return Response.json({ error: "Bad patch" }, { status: 400 });
-  mergeProfile(getProfile(), patch); // throws on malformed input before anything is saved
+  try {
+    mergeProfile(getProfile(), patch); // throws on malformed input before anything is saved
+  } catch (e) {
+    return Response.json({ error: (e as Error).message }, { status: 400 });
+  }
   const out = await execUpdateProfile(patch);
   syncSoon(); // times can move (sleep, prayers, timezone): the Google calendar follows
   const profile = getProfile();

@@ -136,8 +136,38 @@ export interface Profile {
   faith?: FaithSettings;
   ifThen?: IfThen[];
   lessons?: Lesson[];
+  /** Daily tasks: untimed things to tick on Today ("Pray Duha"), never placed in the schedule. */
+  tasks?: Task[];
+  /** Dated deadlines (exams, homework, applications), counted down on Today and reminded before. */
+  deadlines?: Deadline[];
   updatedAt?: string;
 }
+
+export interface Task {
+  id: string;
+  title: string;
+  /** Only on these days; every day when empty. */
+  days?: Day[];
+  goalId?: string;
+  note?: string;
+  /** YYYY-MM-DD it was added: earlier days don't count it as missed. */
+  since?: string;
+}
+
+export interface Deadline {
+  id: string;
+  title: string;
+  /** YYYY-MM-DD */
+  date: string;
+  /** "HH:MM", when it's due at a time of day. */
+  time?: string;
+  goalId?: string;
+  note?: string;
+  done?: boolean;
+}
+
+/** Tracking key of a daily task (block keys never start with it). */
+export const TASK_PREFIX = "task:";
 
 export interface IfThen {
   id: string;

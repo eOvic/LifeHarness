@@ -22,7 +22,7 @@ import { reminderSettings } from "../core/reminders";
 import { addDays, zonedToUtc } from "../core/time";
 import { privateDir } from "./config-dir";
 import { clock, scheduleDays } from "./schedule";
-import { getSettings, replaceFile } from "./store";
+import { getProfile, getSettings, replaceFile } from "./store";
 
 export const SCOPE = "https://www.googleapis.com/auth/calendar.app.created";
 export const CALENDAR_NAME = "LifeHarness";
@@ -252,7 +252,12 @@ function describe(e: unknown): string {
 
 // ---- sync ---------------------------------------------------------------------------------------------
 const eventId = (key: string) => `lh${createHash("sha256").update(key).digest("hex").slice(0, 40)}`; // base32hex, as Google requires
-const contentHash = (e: CalendarEvent) => createHash("sha256").update(JSON.stringify([e.summary, e.description, e.start, e.end, e.reminderMin])).digest("hex").slice(0, 16);
+// (reminderMins only joins when set, so the hash of every existing block event stays the same)
+const contentHash = (e: CalendarEvent) =>
+  createHash("sha256")
+    .update(JSON.stringify([e.summary, e.description, e.start, e.end, e.reminderMin, ...(e.reminderMins ? [e.reminderMins] : [])]))
+    .digest("hex")
+    .slice(0, 16);
 
 function eventBody(e: CalendarEvent) {
   return {
@@ -262,7 +267,7 @@ function eventBody(e: CalendarEvent) {
     description: e.description,
     start: e.start,
     end: e.end,
-    reminders: { useDefault: false, overrides: e.reminderMin == null ? [] : [{ method: "popup", minutes: e.reminderMin }] },
+    reminders: { useDefault: false, overrides: (e.reminderMins ?? (e.reminderMin == null ? [] : [e.reminderMin])).map((minutes) => ({ method: "popup", minutes })) },
     extendedProperties: { private: { lh: e.key, lhHash: contentHash(e) } },
   };
 }
@@ -286,7 +291,8 @@ export function desiredEvents(): { events: CalendarEvent[]; from: string; to: st
   const { tz, today } = clock();
   const to = addDays(today, WINDOW_DAYS);
   const { days } = scheduleDays(3); // this week and the next two: covers today + 14 days
-  return { events: calendarEvents(days, { tz, from: today, to, reminders: reminderSettings(getSettings().reminders) }), from: today, to, tz };
+  const deadlines = getProfile().deadlines;
+  return { events: calendarEvents(days, { tz, from: today, to, reminders: reminderSettings(getSettings().reminders), deadlines }), from: today, to, tz };
 }
 
 /** One pass: make the calendar's events in the window match `want`. Exported for tests. */

@@ -1,8 +1,9 @@
 // .ics export (RFC 5545).
 // Times are written in UTC so any calendar app shows them correctly without a VTIMEZONE block.
 // Stable UIDs (<date>-<block key>) let a re-import update events in place.
+import { DEADLINE_EVENT_REMINDERS } from "./calendar-events";
 import { addDays, zonedToUtc } from "./time";
-import type { DaySchedule, ScheduledBlock } from "./types";
+import type { DaySchedule, Deadline, ScheduledBlock } from "./types";
 
 function esc(text: string): string {
   return text.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
@@ -40,7 +41,8 @@ export function alertMinutes(b: ScheduledBlock): number | null {
   return null;
 }
 
-export function toIcs(days: DaySchedule[], tz: string, calName = "LifeHarness"): string {
+/** Deadlines become all-day events with alerts at 09:00 a week before and the day before. */
+export function toIcs(days: DaySchedule[], tz: string, calName = "LifeHarness", deadlines: Deadline[] = []): string {
   const now = stamp(new Date());
   const lines = [
     "BEGIN:VCALENDAR",
@@ -82,6 +84,23 @@ export function toIcs(days: DaySchedule[], tz: string, calName = "LifeHarness"):
       if (alert != null) lines.push("BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${esc(b.title)}`, `TRIGGER:-PT${alert}M`, "END:VALARM");
       lines.push("END:VEVENT");
     }
+  }
+  const from = days[0]?.date ?? "";
+  for (const dl of deadlines) {
+    if (dl.done || !/^\d{4}-\d{2}-\d{2}$/.test(dl.date) || dl.date < from) continue;
+    const title = `Due: ${dl.title}${dl.time ? ` (${dl.time})` : ""}`;
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:deadline-${dl.id.replace(/[^a-z0-9]+/gi, "-")}@lifeharness`,
+      `DTSTAMP:${now}`,
+      `DTSTART;VALUE=DATE:${dl.date.replace(/-/g, "")}`,
+      `DTEND;VALUE=DATE:${addDays(dl.date, 1).replace(/-/g, "")}`,
+      `SUMMARY:${esc(title)}`,
+      "TRANSP:TRANSPARENT",
+    );
+    if (dl.note) lines.push(`DESCRIPTION:${esc(dl.note)}`);
+    for (const m of DEADLINE_EVENT_REMINDERS) lines.push("BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${esc(title)}`, `TRIGGER:-PT${m}M`, "END:VALARM");
+    lines.push("END:VEVENT");
   }
   lines.push("END:VCALENDAR");
   return lines.map(fold).join("\r\n") + "\r\n";

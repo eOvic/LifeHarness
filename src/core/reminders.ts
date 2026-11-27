@@ -1,11 +1,13 @@
 // Reminders: what to notify you of, and when. Pure (no clock, no server), so it's tested directly.
 //   - a plan block: when it starts, or `before` minutes earlier, with its if-then plan;
 //   - prayers, if you want them;
-//   - an evening check-in, only while some of the day's tracked blocks are still unmarked.
+//   - an evening check-in, only while some of the day's tracked blocks or daily tasks are still open;
+//   - deadlines: 7 days before, the day before and on the day, at 09:00 (src/core/tasks.ts).
 // Fixed commitments (work, classes) and sleep get none, and nothing is sent for a block already marked.
 // The server lists them (app/api/reminders); the desktop shell shows them (electron/main.cjs).
+import { DEADLINE_REMIND_AT, deadlineAlerts, taskKey, tasksFor } from "./tasks";
 import { fmt, toMin, zonedToUtc } from "./time";
-import type { DaySchedule, Tracking } from "./types";
+import type { DaySchedule, Deadline, Task, Tracking } from "./types";
 
 export interface ReminderSettings {
   /** When a plan block starts. */
@@ -38,7 +40,15 @@ export interface Reminder {
 export const reminderSettings = (saved?: Partial<ReminderSettings>): ReminderSettings => ({ ...REMINDER_DEFAULTS, ...(saved ?? {}) });
 
 /** Reminders due from 2 minutes ago (just due, still worth showing) to `horizonMs` ahead, in time order. */
-export function remindersFor(days: DaySchedule[], tracking: Tracking, s: ReminderSettings, tz: string, now: Date, horizonMs = 36 * 3_600_000): Reminder[] {
+export function remindersFor(
+  days: DaySchedule[],
+  tracking: Tracking,
+  s: ReminderSettings,
+  tz: string,
+  now: Date,
+  horizonMs = 36 * 3_600_000,
+  extra: { tasks?: Task[]; deadlines?: Deadline[] } = {},
+): Reminder[] {
   const from = now.getTime() - 2 * 60_000;
   const to = now.getTime() + horizonMs;
   const out: Reminder[] = [];
@@ -64,12 +74,17 @@ export function remindersFor(days: DaySchedule[], tracking: Tracking, s: Reminde
       const at = toMin(s.eveningAt);
       const due = d.blocks.filter((b) => b.tracked && !b.overlay && b.start < at);
       const open = due.filter((b) => !marks[b.key]);
-      if (open.length)
-        add(
-          { id: `evening:${d.date}`, title: "Mark today", body: `${open.length} of ${due.length} ${due.length === 1 ? "block" : "blocks"} ${open.length === 1 ? "isn't" : "aren't"} marked yet.`, path: "/today" },
-          zonedToUtc(d.date, at, tz),
-        );
+      const tasks = tasksFor(extra.tasks, d.date);
+      const openTasks = tasks.filter((t) => !marks[taskKey(t.id)]);
+      const parts = [
+        open.length && `${open.length} of ${due.length} ${due.length === 1 ? "block" : "blocks"} ${open.length === 1 ? "isn't" : "aren't"} marked yet.`,
+        openTasks.length && `Still to tick: ${openTasks.map((t) => t.title).join(", ")}.`,
+      ].filter(Boolean);
+      if (parts.length) add({ id: `evening:${d.date}`, title: "Mark today", body: parts.join(" "), path: "/today" }, zonedToUtc(d.date, at, tz));
     }
+  }
+  for (const a of deadlineAlerts(extra.deadlines)) {
+    add({ id: a.id, title: a.title, body: a.body, path: "/today" }, zonedToUtc(a.date, toMin(DEADLINE_REMIND_AT), tz));
   }
   return out.sort((a, b) => a.at.localeCompare(b.at));
 }

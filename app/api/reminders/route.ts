@@ -3,7 +3,7 @@
 import { reminderSettings, remindersFor } from "@/src/core/reminders";
 import { addDays } from "@/src/core/time";
 import { clock, scheduleDays } from "@/src/server/schedule";
-import { getSettings, getTracking } from "@/src/server/store";
+import { getProfile, getSettings, getTracking } from "@/src/server/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,5 +13,6 @@ export async function GET() {
   const { today } = clock();
   const { days, tz } = scheduleDays(2); // this week and next: today and tomorrow are always in it
   const window = days.filter((d) => d.date === today || d.date === addDays(today, 1));
-  return Response.json({ items: remindersFor(window, getTracking(), settings, tz, new Date()), settings });
+  const { tasks, deadlines } = getProfile();
+  return Response.json({ items: remindersFor(window, getTracking(), settings, tz, new Date(), undefined, { tasks, deadlines }), settings });
 }

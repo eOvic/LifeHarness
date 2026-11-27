@@ -51,7 +51,7 @@ export function scheduleWeek(start?: string, profile: Profile = getProfile()): W
 
 export function weekReportFor(start?: string): WeekReport & { schedule: ReturnType<typeof scheduleWeek> } {
   const schedule = scheduleWeek(start);
-  return { ...weekReport(schedule.days, getTracking(), schedule.today, schedule.nowMin), schedule };
+  return { ...weekReport(schedule.days, getTracking(), schedule.today, schedule.nowMin, getProfile().tasks), schedule };
 }
 
 /** N consecutive weeks of days (for the .ics export). */

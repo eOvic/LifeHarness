@@ -1,6 +1,7 @@
 // Weekly tracking report.
 // Score = done 1 · half 0.5 · skipped 0, over MARKED blocks only. Unmarked = started but never ticked.
-import type { Category, DaySchedule, Tracking } from "./types";
+import { isTaskKey, taskStats, type TaskStat } from "./tasks";
+import type { Category, DaySchedule, Task, Tracking } from "./types";
 
 export interface BlockStat {
   title: string;
@@ -36,12 +37,14 @@ export interface WeekReport {
   weakest: BlockStat | null;
   /** "score" = lowest-scoring block; "unmarked" = everything marked scored 100%, so the most-unmarked block. */
   weakestReason: "score" | "unmarked" | null;
+  /** Daily tasks: days done out of days due (separate from the block score). */
+  tasks: TaskStat[];
 }
 
 const pct = (done: number, half: number, marked: number) => (marked ? Math.round(((done + 0.5 * half) / marked) * 100) : null);
 
 /** `today`/`nowMin` decide which blocks have started (only those can be "unmarked"). */
-export function weekReport(days: DaySchedule[], tracking: Tracking, today: string, nowMin: number): WeekReport {
+export function weekReport(days: DaySchedule[], tracking: Tracking, today: string, nowMin: number, tasks: Task[] = []): WeekReport {
   const byTitle = new Map<string, BlockStat>();
   const dayStats: DayStat[] = [];
   let tot = { done: 0, half: 0, skip: 0, unmarked: 0 };
@@ -80,7 +83,7 @@ export function weekReport(days: DaySchedule[], tracking: Tracking, today: strin
     }
     // Marks whose block no longer exists in the plan still count (the plan may have changed).
     for (const [key, m] of Object.entries(marks)) {
-      if (seen.has(key)) continue;
+      if (seen.has(key) || isTaskKey(key)) continue; // daily tasks have their own section
       const st = byTitle.get(m.title) ?? { title: m.title, category: m.category, core: m.core, done: 0, half: 0, skip: 0, unmarked: 0, score: null };
       byTitle.set(m.title, st);
       st[m.status === "skip" ? "skip" : m.status]++;
@@ -141,6 +144,7 @@ export function weekReport(days: DaySchedule[], tracking: Tracking, today: strin
     streaks,
     weakest,
     weakestReason,
+    tasks: taskStats(tasks, tracking, days.map((d) => d.date), today),
   };
 }
 
@@ -151,6 +155,7 @@ export function reportText(r: WeekReport): string {
     "By block (worst first):",
     ...r.blocks.map((b) => `- ${b.core ? "★ " : ""}${b.title}: ${b.score ?? "-"}% (done ${b.done}, half ${b.half}, skipped ${b.skip}, unmarked ${b.unmarked})`),
     "Core streaks: " + (r.streaks.map((s) => `${s.title} ${s.days}d`).join(", ") || "-"),
+    ...(r.tasks.length ? ["Daily tasks: " + r.tasks.map((t) => `${t.title} ${t.done}/${t.due} days`).join(", ")] : []),
     r.weakestReason === "unmarked"
       ? `Everything marked scored 100%. Most-unmarked block: ${r.weakest!.title} (${r.weakest!.unmarked} unmarked): tracking is the habit to fix.`
       : `Weakest block: ${r.weakest ? `${r.weakest.title} (${r.weakest.score ?? "-"}%)` : "none"}`,

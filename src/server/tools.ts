@@ -123,6 +123,20 @@ export const TOOLS: Record<string, Tool> = {
       energy: obj({ chronotype: enm(["morning", "evening", "neither"]), peak: obj({ start: hm, end: hm }, ["start", "end"]), low: obj({ start: hm, end: hm }, ["start", "end"]), focusMaxMin: num("Longest single focus stretch in minutes"), notes: str() }),
       capacity: obj({ weeklyFreeHours: num(), notes: str("e.g. the load they'd keep on a bad week") }),
       habits: obj({ running: arr(str(), "Habits that already run reliably"), wanted: arr(str(), "Habits they want") }),
+      tasks: arr(
+        obj(
+          { id: str('Stable slug, e.g. "duha"'), title: str("Short: 'Pray Duha'"), days: arr(day, "Only on these days; omit for every day"), goalId: str(), note: str() },
+          ["id", "title"],
+        ),
+        "Daily tasks: untimed things to tick on Today (not placed in the schedule). Use when they want to track something without a time slot.",
+      ),
+      deadlines: arr(
+        obj(
+          { id: str("Stable slug"), title: str("What is due: 'DSP HW4'"), date: str("YYYY-MM-DD"), time: hm, goalId: str(), note: str(), done: bool("True once it's handed in / over") },
+          ["id", "title", "date"],
+        ),
+        "Dated deadlines (exams, homework, applications). Counted down on Today and reminded 7 days, 1 day and 0 days before.",
+      ),
       obstacles: arr(str(), "Main inner obstacles / what derails a day"),
       history: arr(str(), "Track record: past attempts and what really happened"),
       preferences: arr(str()),
@@ -149,6 +163,8 @@ export const TOOLS: Record<string, Tool> = {
         ifThen: arr(str()),
         habitsRunning: arr(str()),
         habitsWanted: arr(str()),
+        tasks: arr(str(), "Task ids"),
+        deadlines: arr(str(), "Deadline ids"),
       }),
     }),
   },
@@ -252,6 +268,8 @@ export async function execUpdateProfile(args: ProfilePatch): Promise<ToolOutcome
     }
   }
   saveProfile(profile);
+  // Deadlines go to the Google calendar (all-day events with phone reminders): send them now.
+  if (args.deadlines || args.remove?.deadlines) void import("./google-calendar").then((g) => g.syncSoon()).catch(() => {});
   return {
     text: [`Saved: ${changes.join("; ") || "no changes"}.`, ...notes, openStrands()].join("\n"),
     detail: changes.join("; "),

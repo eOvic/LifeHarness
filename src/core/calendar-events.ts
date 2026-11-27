@@ -3,19 +3,26 @@
 // Reminders. Fixed commitments and sleep stay out: your calendar has those already, and they aren't
 // the plan. Pure, so it's tested without Google (src/server/google-calendar.ts sends them).
 import type { ReminderSettings } from "./reminders";
-import { addDays } from "./time";
-import type { DaySchedule } from "./types";
+import { DEADLINE_REMIND_AT } from "./tasks";
+import { addDays, toMin } from "./time";
+import type { DaySchedule, Deadline } from "./types";
 
 export interface CalendarEvent {
   /** Stable: "<date>:<block key>" (the server turns it into the event's id). */
   key: string;
   summary: string;
   description: string;
-  start: { dateTime: string; timeZone: string };
-  end: { dateTime: string; timeZone: string };
+  /** A timed event (dateTime), or an all-day one (date, YYYY-MM-DD; the end date is exclusive). */
+  start: { dateTime: string; timeZone: string } | { date: string };
+  end: { dateTime: string; timeZone: string } | { date: string };
   /** A phone reminder this many minutes before the start, or null for none. */
   reminderMin: number | null;
+  /** Several reminders instead (deadlines); minutes before the start. */
+  reminderMins?: number[];
 }
+
+/** Phone reminders of a deadline's all-day event: at 09:00, a week before and the day before. */
+export const DEADLINE_EVENT_REMINDERS = [7, 1].map((days) => days * 1440 - toMin(DEADLINE_REMIND_AT));
 
 /** Wall-clock date-time for minutes from a day's 00:00 (past midnight runs into the next day). */
 export function localDateTime(date: string, min: number): string {
@@ -24,9 +31,21 @@ export function localDateTime(date: string, min: number): string {
   return `${d}T${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}:00`;
 }
 
-/** Events for the days in [from, to). */
-export function calendarEvents(days: DaySchedule[], o: { tz: string; from: string; to: string; reminders: ReminderSettings }): CalendarEvent[] {
+/** Events for the days in [from, to): plan blocks, and deadlines as all-day events. */
+export function calendarEvents(days: DaySchedule[], o: { tz: string; from: string; to: string; reminders: ReminderSettings; deadlines?: Deadline[] }): CalendarEvent[] {
   const out: CalendarEvent[] = [];
+  for (const d of o.deadlines ?? []) {
+    if (d.done || !/^\d{4}-\d{2}-\d{2}$/.test(d.date) || d.date < o.from || d.date >= o.to) continue;
+    out.push({
+      key: `deadline:${d.id}`,
+      summary: `Due: ${d.title}${d.time ? ` (${d.time})` : ""}`,
+      description: [d.note, "A deadline from LifeHarness."].filter(Boolean).join("\n"),
+      start: { date: d.date },
+      end: { date: addDays(d.date, 1) },
+      reminderMin: null,
+      reminderMins: DEADLINE_EVENT_REMINDERS,
+    });
+  }
   for (const d of days) {
     if (d.date < o.from || d.date >= o.to) continue;
     for (const b of d.blocks) {
