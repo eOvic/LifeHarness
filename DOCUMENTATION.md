@@ -168,9 +168,14 @@ Mark each block as you go:
 
 The **Now** card in the sidebar always shows your current block and what's next, from any page.
 
+**Daily tasks** are things you want to do each day without a time slot, like a prayer, drinking water or reading a page. Add one with **Add a daily task…** on Today, or ask the coach ("add Duha as a daily task"). Tick it when it's done; click again to undo. You can also tick yesterday's. The coach can limit a task to some weekdays ("Kahf on Fridays"). Tasks never enter the schedule or the block score: the weekly review shows them separately, as "done on 5 of 7 days".
+
+**Deadlines** are anything due on a date: an exam, homework, an application. Add one on Today with a title and a date, or just mention it to the coach. Today counts them down (amber within a week, red the day before), and LifeHarness reminds you **a week before, the day before and on the day**, at 09:00. Click **✓** when it's handed in. Deadlines also appear as all-day events in Google Calendar sync and in **Export .ics**, with phone alerts a week and a day before.
+
 **Reminders** (desktop app): a notification when each block starts, with its if-then plan, and an evening check-in at 21:30 if some of the day's blocks aren't marked yet. Clicking one opens Today. Blocks you've already marked are skipped.
 - **When you close the window,** LifeHarness keeps running in the tray (on macOS, the menu bar), so reminders keep coming. Quit from that icon, or with **⌘Q** on a Mac.
 - **To change them, go to Settings → Reminders.** You can get them 5–15 minutes before a block starts, turn on prayer times, move or turn off the check-in, turn off background running, start LifeHarness when you log in, or send a test reminder.
+- **Deadlines** get their own reminders, and your **daily tasks** still to tick are listed in the evening check-in.
 - **On your phone,** use your calendar: see the next section.
 
 ### 4. The week and your phone's calendar
@@ -205,7 +210,8 @@ To connect, you register your own free Google client once (about 10 minutes). Go
 **Review** shows how the week went:
 - your **week score** and **core score** (your must-do blocks);
 - results by day and by block, and your streaks;
-- your **weakest block**.
+- your **weakest block**;
+- your **daily tasks**: on how many days each was done.
 
 Click **Review with the coach →** for a short conversation about that block. The coach works through **WOOP** (Wish, Outcome, Obstacle, Plan):
 - what you wanted from the block;

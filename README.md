@@ -43,6 +43,7 @@ Older versions and release notes are on the [Releases page](https://github.com/e
 
 - **Plans you can keep:** the AI decides what matters, and a fixed scheduler places it. Blocks never overlap, and part of every day stays free.
 - **Built around your day:** sleep, work or classes and energy peaks, plus optional prayer times calculated for your city.
+- **Daily tasks and deadlines:** tick untimed habits each day, and count down to exams and due dates with reminders a week and a day before.
 - **Reminders:** desktop notifications, an evening check-in, an export to any calendar, and optional Google Calendar sync for your phone.
 - **The AI you already have:** Claude (through Claude Code), ChatGPT, GitHub Copilot, Grok, or an API key from about 40 providers, including Google Gemini's free tier.
 - **Private:** your data stays on your computer. No account, no analytics, no subscription.
