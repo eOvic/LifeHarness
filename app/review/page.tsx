@@ -162,6 +162,24 @@ export default function Review() {
                   </div>
                 </section>
               )}
+
+              {(r.tasks ?? []).some((t) => t.due > 0) && (
+                <section className="mt-8" data-lh="review-tasks">
+                  <Label>Daily tasks</Label>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {r.tasks
+                      .filter((t) => t.due > 0)
+                      .map((t) => (
+                        <span key={t.id} className="rounded-full border border-line px-3 py-1 text-[13px]">
+                          {t.title}{" "}
+                          <span className={cx("lh-mono ml-1 text-[11px]", t.done === t.due ? "text-ok" : t.done * 2 >= t.due ? "text-warn" : "text-danger")}>
+                            {t.done}/{t.due} days
+                          </span>
+                        </span>
+                      ))}
+                  </div>
+                </section>
+              )}
             </>
           )}
           {err && <p className="mt-4 text-sm text-danger">{err}</p>}

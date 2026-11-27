@@ -3,12 +3,14 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
+import { DailyTasks, Deadlines, newId } from "@/components/TasksAndDeadlines";
 import { refreshSidebar } from "@/components/Shell";
 import { Button, cx, Empty, IconButton, Label, Spinner } from "@/components/ui";
 import { tint } from "@/components/WeekGrid";
 import { getJson, postJson } from "@/lib/api";
 import { addDays, fmt, fmtDuration } from "@/src/core/time";
-import { CATEGORIES, type Mark, type MarkStatus, type Plan, type ScheduledBlock, type WeekSchedule } from "@/src/core/types";
+import { taskKey } from "@/src/core/tasks";
+import { CATEGORIES, type Deadline, type Mark, type MarkStatus, type Plan, type Profile, type ScheduledBlock, type Task, type WeekSchedule } from "@/src/core/types";
 
 type Week = WeekSchedule & { today: string; nowMin: number; tz: string; marks: Record<string, Record<string, Mark>> };
 
@@ -23,6 +25,18 @@ export default function Today() {
   const [plan, setPlan] = useState<Plan | null | undefined>(undefined);
   const [date, setDate] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  const loadProfile = useCallback(() => getJson<{ profile: Profile }>("/api/profile").then((r) => setProfile(r.profile)).catch(() => {}), []);
+  /** Tasks and deadlines live in the life map: edit them with a profile patch. */
+  const patchProfile = async (patch: object) => {
+    try {
+      const r = await postJson<{ profile: Profile }>("/api/profile", patch);
+      setProfile(r.profile);
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  };
 
   const load = useCallback(async (start?: string) => {
     try {
@@ -36,10 +50,11 @@ export default function Today() {
 
   useEffect(() => {
     load();
+    loadProfile();
     getJson<{ plan: Plan | null }>("/api/state").then((s) => setPlan(s.plan)).catch(() => setPlan(null));
     const t = setInterval(() => load(), 60_000);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, loadProfile]);
 
   const day = week?.days.find((d) => d.date === date);
   const goals = useMemo(() => Object.fromEntries((plan?.goals ?? []).map((g) => [g.id, g.title])), [plan]);
@@ -62,6 +77,21 @@ export default function Today() {
     try {
       await postJson("/api/track", { date: day.date, key: b.key, status });
       refreshSidebar();
+    } catch (e) {
+      setErr((e as Error).message);
+      load(week.start);
+    }
+  };
+
+  const tickTask = async (t: Task, done: boolean) => {
+    if (!week || !day) return;
+    const key = taskKey(t.id);
+    const marks = { ...week.marks, [day.date]: { ...(week.marks[day.date] ?? {}) } };
+    if (done) marks[day.date][key] = { status: "done", at: new Date().toISOString(), title: t.title, core: false, category: "routine" };
+    else delete marks[day.date][key];
+    setWeek({ ...week, marks });
+    try {
+      await postJson("/api/track", { date: day.date, key, status: done ? "done" : null });
     } catch (e) {
       setErr((e as Error).message);
       load(week.start);
@@ -145,6 +175,27 @@ export default function Today() {
             <div className="grid gap-3 sm:grid-cols-2">
               <NowCard label="Now" block={current} goals={goals} nowMin={week.nowMin} />
               <NowCard label="Next" block={next} goals={goals} nowMin={week.nowMin} />
+            </div>
+          )}
+
+          {profile && (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <DailyTasks
+                tasks={profile.tasks ?? []}
+                date={day.date}
+                today={week.today}
+                marks={dm}
+                onTick={tickTask}
+                onAdd={(title) => patchProfile({ tasks: [{ id: newId(title), title }] })}
+                onRemove={(t) => patchProfile({ remove: { tasks: [t.id] } })}
+              />
+              <Deadlines
+                deadlines={profile.deadlines ?? []}
+                today={week.today}
+                onAdd={(d) => patchProfile({ deadlines: [{ id: newId(d.title), ...d }] })}
+                onDone={(d: Deadline) => patchProfile({ deadlines: [{ id: d.id, done: true }] })}
+                onRemove={(d: Deadline) => patchProfile({ remove: { deadlines: [d.id] } })}
+              />
             </div>
           )}
 
